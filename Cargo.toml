@@ -1,0 +1,12 @@
+[package]
+name = "trading-rs"
+version = "0.1.0"
+authors = ["scalexm <martin.alex32@hotmail.fr>"]
+
+[[bin]]
+name = "bin"
+path = "bin/main.rs"
+
+[lib]
+name = "trade_rs"
+path = "src/lib.rs"
