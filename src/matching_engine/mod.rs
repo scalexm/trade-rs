@@ -6,7 +6,7 @@ mod test;
 
 use std::collections::{BTreeMap, Bound};
 use self::arena::{Index, Arena};
-use std::mem;
+use std::{mem, fmt};
 
 /// An identifier which should uniquely determine a trader.
 pub type TraderId = usize;
@@ -71,17 +71,17 @@ pub enum Side {
 /// An order.
 pub struct Order {
     /// Order price.
-    price: Price,
+    pub price: Price,
 
     /// Order size, represented by a non-negative integer: the representation is therefore
     /// dependent of how much an asset can be split.
-    size: usize,
+    pub size: usize,
 
     /// Order side: `Buy` or `Sell`.
-    side: Side,
+    pub side: Side,
 
     /// ID of the order owner.
-    trader: TraderId,
+    pub trader: TraderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -97,7 +97,7 @@ trait Executor {
         &mut self,
         order: Order,
         range: I
-    ) -> (Option<Price>, ExecResult);
+    ) -> (Price, ExecResult);
 }
 
 impl Executor for BookEntries {
@@ -116,8 +116,8 @@ impl Executor for BookEntries {
                     maybe_index = entry.next;
                 } else {
                     // The order has been completely filled.
-                    order.size = 0;
                     entry.size -= order.size;
+                    order.size = 0;
                     break;
                 }
             }
@@ -136,14 +136,15 @@ impl Executor for BookEntries {
     /// * `ExecResult::NotExecuted` if the range was empty.
     fn exec_range<'a, I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>>(
         &mut self,
-        order: Order,
+        mut order: Order,
         range: I
-    ) -> (Option<Price>, ExecResult)
+    ) -> (Price, ExecResult)
     {
         let mut exec_result = ExecResult::NotExecuted;
         for (price, limit) in range {
             if let Some(link) = limit.link {
-                let (maybe_index, order) = self.exec(link, order);
+                let (maybe_index, new_order) = self.exec(link, order);
+                order = new_order;
                 exec_result = ExecResult::Filled(order);
 
                 match maybe_index {
@@ -152,7 +153,7 @@ impl Executor for BookEntries {
                     // completely filled, we can return.
                     Some(index) => {
                         limit.link.as_mut().unwrap().head = index;
-                        return (Some(*price), exec_result);
+                        return (*price, exec_result);
                     }
 
                     // All the entries at this price limit were exhausted, hence we mark
@@ -161,7 +162,10 @@ impl Executor for BookEntries {
                 }
             }
         }
-        (None, exec_result)
+        match order.side {
+            Side::Buy => (order.price + 1, exec_result),
+            Side::Sell => (order.price - 1, exec_result),
+        }
     }
 }
 
@@ -175,72 +179,130 @@ impl MatchingEngine {
         }
     }
 
-    pub fn limit(&mut self, order: Order) -> Option<Order> {
-        let (maybe_price, exec_result) = match order.side {
-            Side::Buy => {
+    fn limit_size(&self, limit: PriceLimit) -> usize {
+        match limit.link {
+            Some(link) => {
+                let mut count = 0;
+                let mut maybe_index = Some(link.head);
+                while let Some(index) = maybe_index {
+                    let entry = self.entries.get(index);
+                    count += entry.size;
+                    maybe_index = entry.next;
+                }
+                count
+            },
+            None => 0,
+        }
+    }
+
+    fn insert_order(&mut self, order: Order) {
+        let index = self.entries.alloc(BookEntry {
+            size: order.size,
+            next: None,
+            trader: order.trader,
+        });
+
+        let price_point =
+            self.price_limits
+                .entry(order.price)
+                .or_insert_with(|| PriceLimit { link: None });
+
+        if price_point.link.is_some() {
+            let link = price_point.link.as_mut().unwrap();
+            self.entries.get_mut(link.tail).next = Some(index);
+                link.tail = index;
+        } else {
+            mem::replace(&mut price_point.link, Some(Link {
+                head: index,
+                tail: index,
+            }));
+        }
+
+        match order.side {
+            Side::Buy if order.price > self.best_bid => {
+                self.best_bid = order.price;
+            },
+            Side::Sell if order.price < self.best_ask => {
+                self.best_ask = order.price;
+            },
+            _ => (),
+        }
+    }
+
+    pub fn limit(&mut self, order: Order) {
+        let (new_price, exec_result) = match order.side {
+            Side::Buy if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(self.best_ask), Bound::Included(order.price))
                 );
                 self.entries.exec_range(order, range)
             },
-            Side::Sell => {
+            Side::Sell if order.price <= self.best_bid => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(order.price), Bound::Included(self.best_bid))
                 ).rev();
                 self.entries.exec_range(order, range)
             },
+            _ => (0, ExecResult::NotExecuted)
         };
 
         match exec_result {
             // The previous range was empty, i.e. the limit order is not marketable and should
             // be inserted in the order book.
             ExecResult::NotExecuted => {
-                let index = self.entries.alloc(BookEntry {
-                    size: order.size,
-                    next: None,
-                    trader: order.trader,
-                });
-
-                let price_point =
-                    self.price_limits
-                        .entry(order.price)
-                        .or_insert_with(|| PriceLimit { link: None });
-
-                if price_point.link.is_some() {
-                    let link = price_point.link.as_mut().unwrap();
-                    self.entries.get_mut(link.tail).next = Some(index);
-                        link.tail = index;
-                } else {
-                    mem::replace(&mut price_point.link, Some(Link {
-                        head: index,
-                        tail: index,
-                    }));
-                }
-
-                // Update the best bid / best ask consequently.
-                if order.price < self.best_ask {
-                    self.best_ask = order.price;
-                } else if order.price > self.best_bid {
-                    self.best_bid = order.price;
-                }
-
-                None
+                self.insert_order(order);
             },
             ExecResult::Filled(order) => {
-                match maybe_price {
-                    Some(price) => match order.side {
-                        Side::Buy => self.best_ask = price,
-                        Side::Sell => self.best_bid = price,
-                    },
+                // The order has exhausted the whole range, we insert what remains.
+                if order.size > 0 {
+                    self.insert_order(order);
+                }
 
-                    // The order has exhausted the whole side!
-                    None => match order.side {
-                        Side::Buy => self.best_ask = Price::max_value(),
-                        Side::Sell => self.best_bid = 0,
+                // Go find the new best limit.
+                match order.side {
+                    Side::Buy => {
+                        let maybe_best_ask = self.price_limits.range_mut(
+                            (Bound::Included(new_price), Bound::Included(Price::max_value()))
+                        ).find(|(_, limit)| limit.link.is_some());
+
+                        match maybe_best_ask {
+                            Some((best_price, _)) => self.best_ask = *best_price,
+                            None => self.best_ask = Price::max_value(),
+                        }
+                    },
+                    Side::Sell => {
+                        let maybe_best_bid = self.price_limits.range_mut(
+                            (Bound::Included(0), Bound::Included(new_price))
+                        ).rev().find(|(_, limit)| limit.link.is_some());
+
+                        match maybe_best_bid {
+                            Some((best_price, _)) => self.best_bid = *best_price,
+                            None => self.best_bid = 0,
+                        }
                     }
-                };
-                Some(order)
+                }
+            }
+        };
+    }
+}
+
+impl fmt::Display for MatchingEngine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut bid = true;
+        write!(f, "--- ASK ---\n")?;
+        for (price, limit) in self.price_limits.iter().rev() {
+            if bid && *price < self.best_ask {
+                write!(f, "--- BID ---\n")?;
+                bid = false;
+            }
+            let size = self.limit_size(*limit);
+            if size > 0 {
+                write!(f, "{}: {}\n", price, self.limit_size(*limit))?;
             }
         }
+        if bid {
+            write!(f, "--- BID ---\n")?;
+        }
+        Ok(())
     }
 }
