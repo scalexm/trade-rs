@@ -7,9 +7,33 @@ mod test;
 use std::collections::{BTreeMap, Bound};
 use self::arena::{Index, Arena};
 use std::{mem, fmt};
+use crate::*;
 
-/// An identifier which should uniquely determine a trader.
-pub type TraderId = usize;
+/// An identifier which should uniquely determine an order.
+pub type OrderId = usize;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// Side of an order.
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// An order.
+pub struct Order {
+    /// Order price.
+    price: Price,
+
+    /// Order size, in atomic asset units.
+    size: usize,
+
+    /// Order side: `Buy` or `Sell`.
+    side: Side,
+
+    /// ID of the order owner.
+    trader: TraderId,
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// A limit order at some price limit of the order book.
@@ -40,10 +64,6 @@ struct PriceLimit {
     link: Option<Link>,
 }
 
-/// Prices are represented by non-negative integers: the representation is therefore
-/// dependent on the tick.
-pub type Price = usize;
-
 type PriceLimits = BTreeMap<Price, PriceLimit>;
 type BookEntries = Arena<BookEntry>;
 
@@ -58,30 +78,6 @@ pub struct MatchingEngine {
 
     best_bid: Price,
     best_ask: Price,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// Side of an order.
-pub enum Side {
-    Buy,
-    Sell,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// An order.
-pub struct Order {
-    /// Order price.
-    pub price: Price,
-
-    /// Order size, represented by a non-negative integer: the representation is therefore
-    /// dependent of how much an asset can be split.
-    pub size: usize,
-
-    /// Order side: `Buy` or `Sell`.
-    pub side: Side,
-
-    /// ID of the order owner.
-    pub trader: TraderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

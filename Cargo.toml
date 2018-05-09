@@ -3,6 +3,9 @@ name = "trading-rs"
 version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
 
+[dependencies]
+ws = "0.7.6"
+
 [[bin]]
 name = "bin"
 path = "bin/main.rs"
