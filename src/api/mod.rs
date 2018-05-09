@@ -3,11 +3,13 @@ pub mod binance;
 use crate::*;
 use notify::Notifier;
 
+pub use crossbeam_channel::Sender;
+
+pub enum ApiAction {
+    RequestOrderBookSnapshot,
+}
+
 pub trait ApiClient<N: Notifier> {
-    type Params;
-    type Notifier;
-
-    fn new(params: Self::Params, notifier: N) -> Self;
-
-    fn start_streaming(&mut self);
+    fn sender(&self) -> Sender<ApiAction>;
+    fn stream(&mut self, notifier: N);
 }

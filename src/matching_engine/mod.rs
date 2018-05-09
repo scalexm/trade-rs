@@ -23,16 +23,16 @@ pub enum Side {
 /// An order.
 pub struct Order {
     /// Order price.
-    price: Price,
+    pub price: Price,
 
     /// Order size, in atomic asset units.
-    size: usize,
+    pub size: usize,
 
     /// Order side: `Buy` or `Sell`.
-    side: Side,
+    pub side: Side,
 
     /// ID of the order owner.
-    trader: TraderId,
+    pub trader: TraderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -46,7 +46,7 @@ struct BookEntry {
     next: Option<Index>,
 
     /// ID of the trader who owns the order.
-    trader: TraderId,
+    order_id: OrderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -78,6 +78,8 @@ pub struct MatchingEngine {
 
     best_bid: Price,
     best_ask: Price,
+
+    max_order_id: OrderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -172,6 +174,7 @@ impl MatchingEngine {
             entries: BookEntries::new(capacity),
             best_bid: 0,
             best_ask: Price::max_value(),
+            max_order_id: 0,
         }
     }
 
@@ -191,12 +194,15 @@ impl MatchingEngine {
         }
     }
 
-    fn insert_order(&mut self, order: Order) {
+    fn insert_order(&mut self, order: Order) -> OrderId {
+        let order_id = self.max_order_id;
         let index = self.entries.alloc(BookEntry {
             size: order.size,
             next: None,
-            trader: order.trader,
+            order_id,
         });
+
+        self.max_order_id += 1;
 
         let price_point =
             self.price_limits
@@ -223,9 +229,11 @@ impl MatchingEngine {
             },
             _ => (),
         }
+
+        order_id
     }
 
-    pub fn limit(&mut self, order: Order) {
+    pub fn limit(&mut self, order: Order) -> Option<OrderId> {
         let (new_price, exec_result) = match order.side {
             Side::Buy if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
@@ -246,14 +254,9 @@ impl MatchingEngine {
             // The previous range was empty, i.e. the limit order is not marketable and should
             // be inserted in the order book.
             ExecResult::NotExecuted => {
-                self.insert_order(order);
+                Some(self.insert_order(order))
             },
             ExecResult::Filled(order) => {
-                // The order has exhausted the whole range, we insert what remains.
-                if order.size > 0 {
-                    self.insert_order(order);
-                }
-
                 // Go find the new best limit.
                 match order.side {
                     Side::Buy => {
@@ -276,9 +279,16 @@ impl MatchingEngine {
                             None => self.best_bid = 0,
                         }
                     }
+                };
+
+                // The order has exhausted the whole range, we insert what remains.
+                if order.size > 0 {
+                    Some(self.insert_order(order))
+                } else {
+                    None
                 }
             }
-        };
+        }
     }
 }
 

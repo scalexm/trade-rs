@@ -1,9 +1,18 @@
 #![feature(crate_in_paths)]
+#![feature(crate_visibility_modifier)]
+
+extern crate ws;
+extern crate serde_json;
+extern crate serde;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate crossbeam_channel;
 
 pub mod matching_engine;
 pub mod queue_reactive;
 pub mod notify;
 pub mod api;
+
+use std::collections::BTreeMap;
 
 /// A price, in ticks.
 pub type Price = usize;
@@ -15,17 +24,23 @@ pub type TraderId = usize;
 /// A liquidity consuming trade.
 pub struct Trade {
     /// Size consumed by the trade.
-    size: usize,
+    pub size: usize,
 
     // Trade timestamp.
-    time: usize,
+    pub time: usize,
 
     /// Price in ticks.
-    price: usize,
+    pub price: usize,
 
     /// ID of the buyer.
-    buyer_id: TraderId,
+    pub buyer_id: TraderId,
 
     /// ID of the seller.
-    seller_id: TraderId,
+    pub seller_id: TraderId,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct OrderBook {
+    pub ask: BTreeMap<Price, usize>,
+    pub bid: BTreeMap<Price, usize>,
 }

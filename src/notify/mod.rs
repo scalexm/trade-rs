@@ -1,7 +1,16 @@
 use crate::*;
 
+pub enum Side {
+    Bid,
+    Ask,
+}
+
+pub enum Notification {
+    Trade(Trade),
+    LimitUpdate(Side, Price, usize),
+    OrderBookSnapshot(OrderBook),
+}
+
 pub trait Notifier {
-    fn notify_trade(&mut self, trade: Trade);
-    fn notify_bid_limit_update(&mut self, price: Price, size: usize);
-    fn notify_ask_limit_update(&mut self, price: Price, size: usize);
+    fn notify(&mut self, notif: Notification);
 }
