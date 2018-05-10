@@ -3,6 +3,16 @@ name = "trading-rs"
 version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
 
+[dependencies]
+serde_json = "1.0"
+serde = "1.0"
+serde_derive = "1.0"
+crossbeam-channel = "0.1"
+
+[dependencies.ws]
+version = "0.7.6"
+features = ["ssl"]
+
 [[bin]]
 name = "bin"
 path = "bin/main.rs"

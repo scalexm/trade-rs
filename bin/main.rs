@@ -1,54 +1,25 @@
 extern crate trade_rs;
-use trade_rs::matching_engine::*;
+use trade_rs::api::*;
+use trade_rs::notify;
+
+struct Notifier;
+
+impl notify::Notifier for Notifier {
+    fn notify(&mut self, notif: notify::Notification) {
+        match notif {
+            notify::Notification::Trade(trade) => {
+                println!("{}", trade.time);
+            },
+            _ => (),
+        }
+    }
+}
 
 fn main() {
-    let mut engine = MatchingEngine::new(100);
-    engine.limit(Order {
-        price: 100,
-        size: 10,
-        side: Side::Buy,
-        trader: 0,
-    });
-    engine.limit(Order {
-        price: 200,
-        size: 7,
-        side: Side::Sell,
-        trader: 1,
-    });
-    
-    println!("{}", engine);
-
-    engine.limit(Order {
-        price: 201,
-        size: 3,
-        side: Side::Buy,
-        trader: 2,
+    let mut client = binance::Client::new(binance::Params {
+        symbol: "trxeth".to_owned(),
+        address: "wss://stream.binance.com:9443".to_owned(),
     });
 
-    engine.limit(Order {
-        price: 99,
-        size: 2,
-        side: Side::Sell,
-        trader: 2,
-    });
-
-    println!("{}", engine);
-
-    engine.limit(Order {
-        price: 198,
-        size: 1,
-        side: Side::Sell,
-        trader: 2,
-    });
-
-    println!("{}", engine);
-
-    engine.limit(Order {
-        price: 199,
-        size: 3,
-        side: Side::Buy,
-        trader: 2,
-    });
-
-    println!("{}", engine);
+    client.stream(Notifier);
 }

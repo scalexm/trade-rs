@@ -7,9 +7,33 @@ mod test;
 use std::collections::{BTreeMap, Bound};
 use self::arena::{Index, Arena};
 use std::{mem, fmt};
+use crate::*;
 
-/// An identifier which should uniquely determine a trader.
-pub type TraderId = usize;
+/// An identifier which should uniquely determine an order.
+pub type OrderId = usize;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// Side of an order.
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// An order.
+pub struct Order {
+    /// Order price.
+    pub price: Price,
+
+    /// Order size, in atomic asset units.
+    pub size: usize,
+
+    /// Order side: `Buy` or `Sell`.
+    pub side: Side,
+
+    /// ID of the order owner.
+    pub trader: TraderId,
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// A limit order at some price limit of the order book.
@@ -22,7 +46,7 @@ struct BookEntry {
     next: Option<Index>,
 
     /// ID of the trader who owns the order.
-    trader: TraderId,
+    order_id: OrderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -40,10 +64,6 @@ struct PriceLimit {
     link: Option<Link>,
 }
 
-/// Prices are represented by non-negative integers: the representation is therefore
-/// dependent on the tick.
-pub type Price = usize;
-
 type PriceLimits = BTreeMap<Price, PriceLimit>;
 type BookEntries = Arena<BookEntry>;
 
@@ -58,30 +78,8 @@ pub struct MatchingEngine {
 
     best_bid: Price,
     best_ask: Price,
-}
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// Side of an order.
-pub enum Side {
-    Buy,
-    Sell,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// An order.
-pub struct Order {
-    /// Order price.
-    pub price: Price,
-
-    /// Order size, represented by a non-negative integer: the representation is therefore
-    /// dependent of how much an asset can be split.
-    pub size: usize,
-
-    /// Order side: `Buy` or `Sell`.
-    pub side: Side,
-
-    /// ID of the order owner.
-    pub trader: TraderId,
+    max_order_id: OrderId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -176,6 +174,7 @@ impl MatchingEngine {
             entries: BookEntries::new(capacity),
             best_bid: 0,
             best_ask: Price::max_value(),
+            max_order_id: 0,
         }
     }
 
@@ -195,12 +194,15 @@ impl MatchingEngine {
         }
     }
 
-    fn insert_order(&mut self, order: Order) {
+    fn insert_order(&mut self, order: Order) -> OrderId {
+        let order_id = self.max_order_id;
         let index = self.entries.alloc(BookEntry {
             size: order.size,
             next: None,
-            trader: order.trader,
+            order_id,
         });
+
+        self.max_order_id += 1;
 
         let price_point =
             self.price_limits
@@ -227,9 +229,11 @@ impl MatchingEngine {
             },
             _ => (),
         }
+
+        order_id
     }
 
-    pub fn limit(&mut self, order: Order) {
+    pub fn limit(&mut self, order: Order) -> Option<OrderId> {
         let (new_price, exec_result) = match order.side {
             Side::Buy if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
@@ -250,14 +254,9 @@ impl MatchingEngine {
             // The previous range was empty, i.e. the limit order is not marketable and should
             // be inserted in the order book.
             ExecResult::NotExecuted => {
-                self.insert_order(order);
+                Some(self.insert_order(order))
             },
             ExecResult::Filled(order) => {
-                // The order has exhausted the whole range, we insert what remains.
-                if order.size > 0 {
-                    self.insert_order(order);
-                }
-
                 // Go find the new best limit.
                 match order.side {
                     Side::Buy => {
@@ -280,9 +279,16 @@ impl MatchingEngine {
                             None => self.best_bid = 0,
                         }
                     }
+                };
+
+                // The order has exhausted the whole range, we insert what remains.
+                if order.size > 0 {
+                    Some(self.insert_order(order))
+                } else {
+                    None
                 }
             }
-        };
+        }
     }
 }
 
