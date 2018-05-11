@@ -16,7 +16,7 @@ pub enum Side {
     Sell,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An order.
 pub struct Order {
     /// Order price.
@@ -35,7 +35,7 @@ pub struct Order {
 /// An identifier which should uniquely determine an entry.
 pub type EntryId = usize;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// A limit order at some price limit of the order book.
 struct BookEntry {
     /// Size of the limit order.
@@ -48,14 +48,14 @@ struct BookEntry {
     id: EntryId,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Pointers to begin and end of the book entries list.
 struct Link {
     head: Index,
     tail: Index,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// A price limit in the order book.
 struct PriceLimit {
     /// If `link` is `None`, the limit is empty. Else, it gives a
@@ -84,14 +84,14 @@ pub struct MatchingEngine {
     max_entry_id: EntryId,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum ExecResult {
     Filled(Order),
     NotExecuted,
 }
 
 trait Executor {
-    fn exec(&mut self, link: Link, order: Order) -> (Option<Index>, Order);
+    fn exec(&mut self, link: &Link, order: Order) -> (Option<Index>, Order);
 
     fn exec_range<'a, I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>>(
         &mut self,
@@ -104,7 +104,7 @@ impl Executor for BookEntries {
     /// Make an order cross through a price limit. Return the updated order (which accounts for
     /// how much the order was filled), as well as an `Index` which points to the first entry
     /// at this price limit which was not exhausted, if any.
-    fn exec(&mut self, link: Link, mut order: Order) -> (Option<Index>, Order) {
+    fn exec(&mut self, link: &Link, mut order: Order) -> (Option<Index>, Order) {
         let mut maybe_index = Some(link.head);
         while let Some(index) = maybe_index {
             {
@@ -142,10 +142,10 @@ impl Executor for BookEntries {
     {
         let mut exec_result = ExecResult::NotExecuted;
         for (price, limit) in range {
-            if let Some(link) = limit.link {
-                let (maybe_index, new_order) = self.exec(link, order);
+            if let Some(ref link) = limit.link {
+                let (maybe_index, new_order) = self.exec(link, order.clone());
                 order = new_order;
-                exec_result = ExecResult::Filled(order);
+                exec_result = ExecResult::Filled(order.clone());
 
                 match maybe_index {
                     // All the indices prior to `index` were exhausted, hence we update the
@@ -187,9 +187,9 @@ impl MatchingEngine {
     }
 
     /// Compute the total size of a given limit.
-    fn size_at_limit(&self, limit: PriceLimit) -> usize {
+    fn size_at_limit(&self, limit: &PriceLimit) -> usize {
         match limit.link {
-            Some(link) => {
+            Some(ref link) => {
                 let mut count = 0;
                 let mut maybe_index = Some(link.head);
                 while let Some(index) = maybe_index {
@@ -251,13 +251,13 @@ impl MatchingEngine {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(self.best_ask), Bound::Included(order.price))
                 );
-                self.entries.exec_range(order, range)
+                self.entries.exec_range(order.clone(), range)
             },
             Side::Sell if order.price <= self.best_bid => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(order.price), Bound::Included(self.best_bid))
                 ).rev();
-                self.entries.exec_range(order, range)
+                self.entries.exec_range(order.clone(), range)
             },
             _ => (0, ExecResult::NotExecuted)
         };
@@ -268,7 +268,7 @@ impl MatchingEngine {
             ExecResult::NotExecuted => {
                 Some(self.insert_order(order))
             },
-            ExecResult::Filled(order) => {
+            ExecResult::Filled(updated_order) => {
                 // Go find the new best limit.
                 match order.side {
                     Side::Buy => {
@@ -294,8 +294,8 @@ impl MatchingEngine {
                 };
 
                 // The order has exhausted the whole range, we insert what remains.
-                if order.size > 0 {
-                    Some(self.insert_order(order))
+                if updated_order.size > 0 {
+                    Some(self.insert_order(updated_order))
                 } else {
                     None
                 }
@@ -313,9 +313,9 @@ impl fmt::Display for MatchingEngine {
                 write!(f, "--- BID ---\n")?;
                 bid = false;
             }
-            let size = self.size_at_limit(*limit);
+            let size = self.size_at_limit(limit);
             if size > 0 {
-                write!(f, "{}: {}\n", price, self.size_at_limit(*limit))?;
+                write!(f, "{}: {}\n", price, self.size_at_limit(limit))?;
             }
         }
         if bid {

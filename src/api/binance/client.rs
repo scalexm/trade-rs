@@ -5,6 +5,7 @@ use ws;
 use serde_json;
 use futures::channel::mpsc::*;
 use futures::prelude::*;
+use tick::*;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Params needed for a binance API client.
@@ -14,8 +15,15 @@ pub struct Params {
 
     /// WebSocket server address.
     pub address: String,
+
+    /// Tick unit for prices.
+    pub price_tick: Tick,
+
+    /// Tick unit for sizes.
+    pub size_tick: Tick,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// A binance API client.
 pub struct Client {
     params: Params,
@@ -30,6 +38,7 @@ impl Client {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum InternalAction {
     Notify(Notification),
     Shutdown,
@@ -43,16 +52,20 @@ pub struct BinanceStream {
 impl BinanceStream {
     fn new(params: Params) -> Self {
         let (snd, rcv) = unbounded();
+        let (price_tick, size_tick) = (params.price_tick, params.size_tick);
         thread::spawn(move || {
             let address = format!(
                "{0}/ws/{1}@trade/{1}@depth",
                 params.address,
                 params.symbol
             );
+            println!("{}", address);
             
             if let Err(_err) = ws::connect(address, |out| Handler {
                 out,
                 snd: snd.clone(),
+                price_tick,
+                size_tick,
             })
             {
                 // FIXME: log error somewhere
@@ -94,6 +107,8 @@ impl ApiClient for Client {
 struct Handler {
     out: ws::Sender,
     snd: UnboundedSender<InternalAction>,
+    price_tick: Tick,
+    size_tick: Tick,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -121,7 +136,7 @@ impl Handler {
         }
     }
 
-    fn parse_message(&mut self, json: String) -> Result<(), serde_json::Error> {
+    fn parse_message(&mut self, json: String) -> Result<(), Error> {
         let v: serde_json::Value = serde_json::from_str(&json)?;
         let event = v["e"].to_string();
 
@@ -129,9 +144,9 @@ impl Handler {
             let trade: BinanceTrade = serde_json::from_value(v)?;
             self.send(InternalAction::Notify(
                 Notification::Trade(Trade {
-                    size: 0,//trade.q,
+                    size: self.size_tick.convert_unticked(&trade.q)?,
                     time: trade.T,
-                    price: 0, //trade.p,
+                    price: self.price_tick.convert_unticked(&trade.p)?,
                     buyer_id: trade.b,
                     seller_id: trade.a,
                 })
@@ -143,7 +158,6 @@ impl Handler {
 
 impl ws::Handler for Handler {
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
-        println!("ok");
         if let ws::Message::Text(json) = msg {
             if let Err(_err) = self.parse_message(json) {
                 // FIXME: log error somewhere

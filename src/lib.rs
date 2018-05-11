@@ -1,18 +1,24 @@
 #![feature(crate_in_paths)]
 #![feature(crate_visibility_modifier)]
+#![feature(nll)]
 
 extern crate ws;
 #[macro_use] extern crate futures;
 extern crate serde_json;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
+extern crate failure;
+#[macro_use] extern crate failure_derive;
 
 pub mod matching_engine;
 pub mod queue_reactive;
 pub mod notify;
 pub mod api;
+pub mod order_book;
+pub mod tick;
 
-use std::collections::BTreeMap;
+pub use failure::Error;
+pub use tick::Tick;
 
 /// A price, in ticks.
 pub type Price = usize;
@@ -37,10 +43,4 @@ pub struct Trade {
 
     /// ID of the seller.
     pub seller_id: TraderId,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct OrderBook {
-    pub ask: BTreeMap<Price, usize>,
-    pub bid: BTreeMap<Price, usize>,
 }
