@@ -1,5 +1,5 @@
 [package]
-name = "trading-rs"
+name = "trade-rs"
 version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
 
@@ -7,7 +7,7 @@ authors = ["scalexm <martin.alex32@hotmail.fr>"]
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-crossbeam-channel = "0.1"
+futures = "0.2.1"
 
 [dependencies.ws]
 version = "0.7.6"

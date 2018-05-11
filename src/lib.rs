@@ -2,10 +2,10 @@
 #![feature(crate_visibility_modifier)]
 
 extern crate ws;
+#[macro_use] extern crate futures;
 extern crate serde_json;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
-#[macro_use] extern crate crossbeam_channel;
 
 pub mod matching_engine;
 pub mod queue_reactive;
