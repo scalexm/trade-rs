@@ -4,12 +4,11 @@ use crate::*;
 use notify::Notification;
 use futures::prelude::*;
 
-pub enum ApiAction {
-    RequestOrderBookSnapshot,
-}
-
+/// A trait implemented by clients of various exchanges API.
 pub trait ApiClient {
+    /// Type of the underlying `Stream` implementor.
     type Stream: Stream<Item = Notification, Error = Never>;
 
+    /// Start streaming notifications.
     fn stream(&self) -> Self::Stream;
 }

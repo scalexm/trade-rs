@@ -7,16 +7,22 @@ use futures::channel::mpsc::*;
 use futures::prelude::*;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Params needed for a binance API client.
 pub struct Params {
+    /// Currency symbol in lowercase, e.g. "trxbtc".
     pub symbol: String,
+
+    /// WebSocket server address.
     pub address: String,
 }
 
+/// A binance API client.
 pub struct Client {
     params: Params,
 }
 
 impl Client {
+    /// Create a new API client with given `params`.
     pub fn new(params: Params) -> Self {
         Client {
             params,
@@ -29,6 +35,7 @@ enum InternalAction {
     Shutdown,
 }
 
+/// `Stream` implementor representing a binance WebSocket stream.
 pub struct BinanceStream {
     rcv: UnboundedReceiver<InternalAction>,
 }
@@ -108,6 +115,8 @@ struct BinanceTrade {
 impl Handler {
     fn send(&mut self, action: InternalAction) {
         if let Err(..) = self.snd.unbounded_send(action) {
+            // The corresponding receiver was dropped, this connection does not make sense
+            // anymore.
             let _ = self.out.shutdown();
         }
     }

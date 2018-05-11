@@ -9,9 +9,6 @@ use self::arena::{Index, Arena};
 use std::{mem, fmt};
 use crate::*;
 
-/// An identifier which should uniquely determine an order.
-pub type OrderId = usize;
-
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// Side of an order.
 pub enum Side {
@@ -35,6 +32,9 @@ pub struct Order {
     pub trader: TraderId,
 }
 
+/// An identifier which should uniquely determine an entry.
+pub type EntryId = usize;
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// A limit order at some price limit of the order book.
 struct BookEntry {
@@ -45,8 +45,7 @@ struct BookEntry {
     /// is the last one at this price limit.
     next: Option<Index>,
 
-    /// ID of the trader who owns the order.
-    order_id: OrderId,
+    id: EntryId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -76,10 +75,13 @@ pub struct MatchingEngine {
     /// A memory arena for storing book entries, independently of their actual price limit.
     entries: BookEntries,
 
+    /// INVARIANT: best limits are *NEVER* empty, unless their value is `0` or
+    /// `Price::max_value()`. Moreover, the price range `(best_bid, best_ask)` is
+    /// *EMPTY*.
     best_bid: Price,
     best_ask: Price,
 
-    max_order_id: OrderId,
+    max_entry_id: EntryId,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -126,10 +128,10 @@ impl Executor for BookEntries {
         (maybe_index, order)
     }
 
-    /// Make an order cross through a range of price limits. Return an `ExecResult`:
-    /// * `ExecResult::Filled(limit, updated_order)` if the order was (partially) filled, with
-    ///   `updated_order` accounting for how much the order was filled and `limit` being the
-    ///   first price limit which was not exhausted: the best bid or best ask should then be
+    /// Make an order cross through a range of price limits. Return a `Price` corresponding to
+    /// the first non exhausted limit (if it makes sense), along with an `ExecResult`:
+    /// * `ExecResult::Filled(updated_order)` if the order was (partially) filled, with
+    ///   `updated_order` accounting for how much the order was filled
     ///   updated depending on the side of the order.
     /// * `ExecResult::NotExecuted` if the range was empty.
     fn exec_range<'a, I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>>(
@@ -168,17 +170,24 @@ impl Executor for BookEntries {
 }
 
 impl MatchingEngine {
+    /// Create a new matchin engine, pre-allocating `capacity` book entries.
     pub fn new(capacity: usize) -> Self {
         MatchingEngine {
             price_limits: PriceLimits::new(),
             entries: BookEntries::new(capacity),
             best_bid: 0,
             best_ask: Price::max_value(),
-            max_order_id: 0,
+            max_entry_id: 0,
         }
     }
 
-    fn limit_size(&self, limit: PriceLimit) -> usize {
+    /// Return the best prices, respectively best bid and best ask.
+    pub fn best_limits(&self) -> (Price, Price) {
+        (self.best_bid, self.best_ask)
+    }
+
+    /// Compute the total size of a given limit.
+    fn size_at_limit(&self, limit: PriceLimit) -> usize {
         match limit.link {
             Some(link) => {
                 let mut count = 0;
@@ -194,15 +203,16 @@ impl MatchingEngine {
         }
     }
 
-    fn insert_order(&mut self, order: Order) -> OrderId {
-        let order_id = self.max_order_id;
+    /// Insert an order in the order book, and update best limits consequently.
+    fn insert_order(&mut self, order: Order) -> EntryId {
+        let id = self.max_entry_id;
         let index = self.entries.alloc(BookEntry {
             size: order.size,
             next: None,
-            order_id,
+            id,
         });
 
-        self.max_order_id += 1;
+        self.max_entry_id += 1;
 
         let price_point =
             self.price_limits
@@ -230,10 +240,12 @@ impl MatchingEngine {
             _ => (),
         }
 
-        order_id
+        id
     }
 
-    pub fn limit(&mut self, order: Order) -> Option<OrderId> {
+    /// Match or insert a limit order. If the order was inserted in the order book, return the
+    /// corresponding `EntryId`.
+    pub fn limit(&mut self, order: Order) -> Option<EntryId> {
         let (new_price, exec_result) = match order.side {
             Side::Buy if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
@@ -301,9 +313,9 @@ impl fmt::Display for MatchingEngine {
                 write!(f, "--- BID ---\n")?;
                 bid = false;
             }
-            let size = self.limit_size(*limit);
+            let size = self.size_at_limit(*limit);
             if size > 0 {
-                write!(f, "{}: {}\n", price, self.limit_size(*limit))?;
+                write!(f, "{}: {}\n", price, self.size_at_limit(*limit))?;
             }
         }
         if bid {
