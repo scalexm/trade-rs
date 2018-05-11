@@ -1,5 +1,6 @@
 use crate::*;
 
+/// Side of a trade.
 pub enum Side {
     Bid,
     Ask,
@@ -8,7 +9,6 @@ pub enum Side {
 pub enum Notification {
     Trade(Trade),
     LimitUpdate(Side, Price, usize),
-    OrderBookSnapshot(OrderBook),
 }
 
 pub trait Notifier {
