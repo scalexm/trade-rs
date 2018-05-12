@@ -407,7 +407,7 @@ impl ws::Handler for Handler {
 
                         thread::spawn(move || {
                             let mut cloned_snd = snd.clone();
-                            let https = hyper_tls::HttpsConnector::new(4).unwrap();
+                            let https = hyper_tls::HttpsConnector::new(2).unwrap();
                             let client = hyper::Client::builder().build::<_, hyper::Body>(https);
                             let fut = client.get(address.parse().unwrap()).and_then(|res| {
                                 res.into_body().concat2()
