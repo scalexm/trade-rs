@@ -29,7 +29,7 @@ pub struct Order {
     pub side: Side,
 
     /// ID of the order owner.
-    pub trader: TraderId,
+    pub owner: TraderId,
 }
 
 /// An identifier which should uniquely determine an entry.
@@ -184,6 +184,13 @@ impl MatchingEngine {
     /// Return the best prices, respectively best bid and best ask.
     pub fn best_limits(&self) -> (Price, Price) {
         (self.best_bid, self.best_ask)
+    }
+
+    pub fn size_at_price(&self, price: Price) -> usize {
+        if let Some(limit) = self.price_limits.get(&price) {
+            return self.size_at_limit(limit);
+        }
+        0
     }
 
     /// Compute the total size of a given limit.
