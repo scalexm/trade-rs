@@ -8,9 +8,16 @@ pub enum Side {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct LimitUpdate {
+    pub side: Side,
+    pub price: Price,
+    pub size: usize,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Notification {
     Trade(Trade),
-    LimitUpdate(Side, Price, usize),
+    LimitUpdates(Vec<LimitUpdate>),
 }
 
 pub trait Notifier {

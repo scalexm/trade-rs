@@ -7,8 +7,10 @@ extern crate ws;
 extern crate serde_json;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
-extern crate failure;
+#[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
+extern crate hyper;
+extern crate hyper_tls;
 
 pub mod matching_engine;
 pub mod queue_reactive;
@@ -19,6 +21,7 @@ pub mod tick;
 
 pub use failure::Error;
 pub use tick::Tick;
+pub use order_book::OrderBook;
 
 /// A price, in ticks.
 pub type Price = usize;
