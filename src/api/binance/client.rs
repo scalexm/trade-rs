@@ -63,7 +63,7 @@ impl BinanceStream {
                 params.ws_address,
                 params.symbol
             );
-            println!("{}", address);
+            info!("Initiating WebSocket connection at {}", address);
             
             if let Err(err) = ws::connect(address, |out| Handler {
                 out,
@@ -74,8 +74,7 @@ impl BinanceStream {
                 previous_u: None,
             })
             {
-                // FIXME: log error somewhere
-                println!("{:?}", err);
+                error!("WebSocket connection terminated with error `{:?}`", err);
             }   
         });
         
@@ -327,6 +326,7 @@ impl ws::Handler for Handler {
                             // The only `Sender` has somehow disconnected, we won't receive
                             // the book hence we cannot continue.
                             Err(..) => {
+                                error!("LOB sender has disconnected");
                                 self.out.shutdown().unwrap();
                                 return Ok(());
                             }
@@ -334,8 +334,7 @@ impl ws::Handler for Handler {
                         match result {
                             Some(book) => {
                                 if let Err(err) = self.process_book_snapshot(book, events) {
-                                    // FIXME: log error somewhere
-                                    println!("{:?}", err);
+                                    error!("LOB request encountered error `{:?}`", err);
                                     
                                     // We cannot continue without the book, we shutdown.
                                     self.out.shutdown().unwrap();
@@ -405,6 +404,8 @@ impl ws::Handler for Handler {
                             self.params.symbol.to_uppercase()
                         );
 
+                        info!("Initiating LOB request at {}", address);
+
                         thread::spawn(move || {
                             let mut cloned_snd = snd.clone();
                             let https = hyper_tls::HttpsConnector::new(2).unwrap();
@@ -447,8 +448,7 @@ impl ws::Handler for Handler {
                 Ok(None) => (),
 
                 Err(err) => {
-                    // FIXME: log error somewhere
-                    println!("{:?}", err)
+                    error!("Message parsing encountered error {:?}", err)
                 }
             };
         }

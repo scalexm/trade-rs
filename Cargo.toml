@@ -12,6 +12,8 @@ failure = "0.1.1"
 failure_derive = "0.1.1"
 hyper = { git = "https://github.com/hyperium/hyper" }
 hyper-tls = { git = "https://github.com/hyperium/hyper-tls" }
+log = "0.4.0"
+env_logger = "0.5.10"
 
 [dependencies.ws]
 version = "0.7.6"

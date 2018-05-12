@@ -1,6 +1,7 @@
 extern crate trade_rs;
 extern crate futures;
 extern crate hyper;
+extern crate env_logger;
 
 use trade_rs::api::*;
 use trade_rs::notify::Notification;
@@ -8,6 +9,8 @@ use trade_rs::Tick;
 use futures::prelude::*;
 
 fn main() {
+    env_logger::init();
+
     let client = binance::Client::new(binance::Params {
         symbol: "btcusdt".to_owned(),
         ws_address: "wss://stream.binance.com:9443".to_owned(),
