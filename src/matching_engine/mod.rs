@@ -12,7 +12,10 @@ use crate::*;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// Side of an order.
 pub enum Side {
+    /// Buy side (would be inserted at bid).
     Buy,
+
+    /// Sell side (would be inserted at ask).
     Sell,
 }
 
@@ -170,7 +173,7 @@ impl Executor for BookEntries {
 }
 
 impl MatchingEngine {
-    /// Create a new matchin engine, pre-allocating `capacity` book entries.
+    /// Return a new matchin engine, pre-allocating `capacity` book entries.
     pub fn new(capacity: usize) -> Self {
         MatchingEngine {
             price_limits: PriceLimits::new(),
@@ -186,6 +189,7 @@ impl MatchingEngine {
         (self.best_bid, self.best_ask)
     }
 
+    /// Retrieve the size of the limit at the given price.
     pub fn size_at_price(&self, price: Price) -> usize {
         if let Some(limit) = self.price_limits.get(&price) {
             return self.size_at_limit(limit);

@@ -9,11 +9,12 @@ use futures::prelude::*;
 use hyper::rt::{Stream as HyperStream, Future as HyperFuture};
 use tick::*;
 use std::mem;
+use order_book::{Side, LimitUpdate};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Params needed for a binance API client.
 pub struct Params {
-    /// Currency symbol in lowercase, e.g. "trxbtc".
+    /// Currency symbol in lower case, e.g. "trxbtc".
     pub symbol: String,
 
     /// WebSocket API address.
@@ -49,6 +50,7 @@ enum InternalAction {
     Notify(Notification),
 }
 
+#[derive(Debug)]
 /// `Stream` implementor representing a binance WebSocket stream.
 pub struct BinanceStream {
     rcv: UnboundedReceiver<InternalAction>,
@@ -110,7 +112,7 @@ impl ApiClient for Client {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-/// Internal representation which keep binance's `u` indicator.
+/// Internal representation which keep binance `u` indicator.
 struct LimitUpdates {
     u: usize,
     updates: Vec<LimitUpdate>,
@@ -132,6 +134,7 @@ enum BookSnapshotState {
     Ok,
 }
 
+/// An object handling a WebSocket API connection.
 struct Handler {
     out: ws::Sender,
     snd: UnboundedSender<InternalAction>,
@@ -333,8 +336,9 @@ impl ws::Handler for Handler {
                         };
                         match result {
                             Some(book) => {
+                                info!("Received LOB snapshot");
                                 if let Err(err) = self.process_book_snapshot(book, events) {
-                                    error!("LOB request encountered error `{:?}`", err);
+                                    error!("LOB processing encountered error `{:?}`", err);
                                     
                                     // We cannot continue without the book, we shutdown.
                                     self.out.shutdown().unwrap();

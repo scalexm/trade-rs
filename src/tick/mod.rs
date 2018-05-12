@@ -3,11 +3,19 @@ mod test;
 use std::fmt;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// An object carrying the number of ticks per unit of something.
+/// 
+/// Example: BTC is quoted on exchanges up to a precision of 1e-8, i.e.
+/// the tick size is 1e-8, so the number of ticks per unit would be 1e8.
+/// 
+/// Used for both prices and sizes.
 pub struct Tick {
     ticks_per_unit: usize,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
+/// An error which indicated that the conversion of an unticked value to a
+/// value in ticks has failed.
 pub struct ConversionError(String, Tick);
 
 impl fmt::Display for ConversionError {
@@ -17,6 +25,7 @@ impl fmt::Display for ConversionError {
 }
 
 impl Tick {
+    /// Return a new `Tick` with given `ticks_per_unit`.
     pub fn new(ticks_per_unit: usize) -> Self {
         if ticks_per_unit == 0 {
             panic!("`ticks_per_unit` cannot be 0");
@@ -27,6 +36,11 @@ impl Tick {
         }
     }
 
+    /// Convert an unticked value, e.g. "0.001" into a value expressed in ticks,
+    /// e.g. if `self.ticks_per_unit == 1000" then this would return `Ok(1)`.
+    /// 
+    /// Return an error if the value was in an incorrect format or if the number of ticks per
+    /// unit was badly chosen.
     pub fn convert_unticked(&self, unticked: &str) -> Result<usize, ConversionError> {
         let mut parts = unticked.split('.').take(2);
         let (int, fract) = match (parts.next(), parts.next()) {

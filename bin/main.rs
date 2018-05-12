@@ -19,13 +19,18 @@ fn main() {
         size_tick: Tick::new(1000000),
     });
 
+    let mut order_book = trade_rs::OrderBook::new();
+
     let fut = client.stream().for_each(|notif| {
         match notif {
             Notification::Trade(trade) => {
                 println!("{:?}", trade)
             }
             Notification::LimitUpdates(updates) => {
-                println!("{}", updates.len())
+                for update in updates {
+                    order_book.update(update);
+                }
+                println!("{}", order_book);
             },
         };
         Ok(())
