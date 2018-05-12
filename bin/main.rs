@@ -8,10 +8,10 @@ use futures::prelude::*;
 
 fn main() {
     let client = binance::Client::new(binance::Params {
-        symbol: "trxbtc".to_owned(),
+        symbol: "btcusdt".to_owned(),
         address: "wss://stream.binance.com:9443".to_owned(),
-        price_tick: Tick::new(100000000),
-        size_tick: Tick::new(1),
+        price_tick: Tick::new(100),
+        size_tick: Tick::new(1000000),
     });
 
     let fut = client.stream().for_each(|notif| {

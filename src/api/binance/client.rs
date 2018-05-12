@@ -2,6 +2,7 @@ use api::*;
 use notify::Notification;
 use std::thread;
 use ws;
+use ws::util::{Timeout, Token};
 use serde_json;
 use futures::channel::mpsc::*;
 use futures::prelude::*;
@@ -66,6 +67,7 @@ impl BinanceStream {
                 snd: snd.clone(),
                 price_tick,
                 size_tick,
+                timeout: None,
             })
             {
                 // FIXME: log error somewhere
@@ -109,6 +111,7 @@ struct Handler {
     snd: UnboundedSender<InternalAction>,
     price_tick: Tick,
     size_tick: Tick,
+    timeout: Option<Timeout>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -156,11 +159,46 @@ impl Handler {
     }
 }
 
+const PING: Token = Token(1);
+const EXPIRE: Token = Token(2);
+
 impl ws::Handler for Handler {
+    fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
+        self.out.ping(vec![])?;
+        self.out.timeout(10_000, PING)?;
+        self.out.timeout(30_000, EXPIRE)
+    }
+
+    fn on_timeout(&mut self, event: Token) -> ws::Result<()> {
+        match event {
+            PING => {
+                self.out.ping(vec![])?;
+                self.out.timeout(10_000, PING)
+            }
+            EXPIRE => self.out.close(ws::CloseCode::Away),
+            _ => Err(ws::Error::new(ws::ErrorKind::Internal, "Invalid timeout token encountered!")),
+        }
+    }
+
+    fn on_new_timeout(&mut self, event: Token, timeout: Timeout) -> ws::Result<()> {
+        if event == EXPIRE {
+            if let Some(t) = self.timeout.take() {
+                self.out.cancel(t)?;
+            }
+            self.timeout = Some(timeout)
+        }
+        Ok(())
+    }
+
+    fn on_frame(&mut self, frame: ws::Frame) -> ws::Result<Option<ws::Frame>> {
+        self.out.timeout(30_000, EXPIRE)?;
+        Ok(Some(frame))
+    }
+
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(json) = msg {
-            if let Err(_err) = self.parse_message(json) {
-                // FIXME: log error somewhere
+            if let Err(err) = self.parse_message(json) {
+                println!("{:?}", err);
             }
         }
         Ok(())
