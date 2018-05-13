@@ -107,18 +107,21 @@ impl fmt::Display for OrderBook {
         let display_limit = DISPLAY_LIMIT.with(|dl| dl.get());
 
         write!(f, "--- ASK ---\n")?;
-        let ask: Vec<_> = self.ask.iter().take(display_limit).collect();
+        let ask: Vec<_> = self.ask.iter()
+                                  .filter(|(_, &size)| size > 0)
+                                  .take(display_limit)
+                                  .collect();
         for (&price, &size) in ask.iter().rev() {
-            if size > 0 {
-                write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
-            }
+            write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
         }
 
         write!(f, "--- BID ---\n")?;
-        for (&price, &size) in self.bid.iter().rev().take(display_limit) {
-            if size > 0 {
-                write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
-            }
+        for (&price, &size) in self.bid.iter()
+                                       .rev()
+                                       .filter(|(_, &size)| size > 0)
+                                       .take(display_limit)
+        {
+            write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
         }
 
         Ok(())
