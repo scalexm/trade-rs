@@ -28,7 +28,7 @@ pub struct Order {
     pub price: Price,
 
     /// Order size, in atomic asset units.
-    pub size: u64,
+    pub size: Size,
 
     /// Order side: `Buy` or `Sell`.
     pub side: Side,
@@ -44,7 +44,7 @@ pub type EntryId = usize;
 /// A limit order at some price limit of the order book.
 struct BookEntry {
     /// Size of the limit order.
-    size: u64,
+    size: Size,
 
     /// Pointer to the next order at this price limit. If `None`, then this entry
     /// is the last one at this price limit.
@@ -112,7 +112,7 @@ trait Executor {
         notifier: &mut N
     ) -> (Price, ExecResult) where I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>;
 
-    fn size_at_limit(&self, limit: &PriceLimit) -> u64;
+    fn size_at_limit(&self, limit: &PriceLimit) -> Size;
 }
 
 impl Executor for BookEntries {
@@ -223,7 +223,7 @@ impl Executor for BookEntries {
     }
 
     /// Compute the total size of a given limit.
-    fn size_at_limit(&self, limit: &PriceLimit) -> u64 {
+    fn size_at_limit(&self, limit: &PriceLimit) -> Size {
         match limit.link {
             Some(ref link) => {
                 let mut count = 0;
@@ -258,7 +258,7 @@ impl MatchingEngine {
     }
 
     /// Retrieve the size of the limit at the given price.
-    pub fn size_at_price(&self, price: Price) -> u64 {
+    pub fn size_at_price(&self, price: Price) -> Size {
         if let Some(limit) = self.price_limits.get(&price) {
             return self.entries.size_at_limit(limit);
         }
