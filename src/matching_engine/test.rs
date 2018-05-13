@@ -2,7 +2,7 @@
 
 use matching_engine::*;
 
-fn new_order(price: Price, size: usize, side: Side) -> Order {
+fn new_order(price: Price, size: u64, side: Side) -> Order {
     Order {
         price,
         size,

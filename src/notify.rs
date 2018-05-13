@@ -16,3 +16,9 @@ pub trait Notifier {
     /// Called when a new notification is available.
     fn notify(&mut self, notif: Notification);
 }
+
+pub struct TrivialNotifier;
+
+impl Notifier for TrivialNotifier {
+    fn notify(&mut self, _: Notification) { }
+}

@@ -114,7 +114,7 @@ impl ApiClient for Client {
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Internal representation which keep binance `u` indicator.
 struct LimitUpdates {
-    u: usize,
+    u: u64,
     updates: Vec<LimitUpdate>,
 }
 
@@ -148,7 +148,7 @@ struct Handler {
 
     /// We keep track of the last `u` indicator sent by binance, this is used for checking
     /// the coherency of the ordering of the events by binance.
-    previous_u: Option<usize>,
+    previous_u: Option<u64>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -156,14 +156,14 @@ struct Handler {
 /// A JSON representation of a trade, sent by binance.
 struct BinanceTrade {
     e: String,
-    E: usize,
+    E: u64,
     s: String,
     t: usize,
     p: String,
     q: String,
     b: usize,
     a: usize,
-    T: usize,
+    T: u64,
     m: bool,
     M: bool,
 }
@@ -181,10 +181,10 @@ struct BinanceLimitUpdate {
 /// A JSON representation of an orderbook update, sent by binance.
 struct BinanceDepthUpdate {
     e: String,
-    E: usize,
+    E: u64,
     s: String,
-    U: usize,
-    u: usize,
+    U: u64,
+    u: u64,
     b: Vec<BinanceLimitUpdate>,
     a: Vec<BinanceLimitUpdate>,
 }
@@ -193,7 +193,7 @@ struct BinanceDepthUpdate {
 #[allow(non_snake_case)]
 /// A JSON representation of an orderbook snapshot, sent by binance.
 struct BinanceBookSnapshot {
-    lastUpdateId: usize,
+    lastUpdateId: u64,
     bids: Vec<BinanceLimitUpdate>,
     asks: Vec<BinanceLimitUpdate>,
 }

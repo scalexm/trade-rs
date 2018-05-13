@@ -12,7 +12,7 @@ use num::*;
 /// 
 /// Used for both prices and sizes.
 pub struct Tick {
-    ticks_per_unit: usize,
+    ticks_per_unit: u64,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
@@ -28,7 +28,7 @@ impl fmt::Display for ConversionError {
 
 impl Tick {
     /// Return a new `Tick` with given `ticks_per_unit`.
-    pub fn new(ticks_per_unit: usize) -> Self {
+    pub fn new(ticks_per_unit: u64) -> Self {
         if ticks_per_unit == 0 {
             panic!("`ticks_per_unit` cannot be 0");
         }
@@ -43,7 +43,7 @@ impl Tick {
     /// 
     /// Return an error if the value was in an incorrect format or if the number of ticks per
     /// unit was badly chosen.
-    pub fn convert_unticked(&self, unticked: &str) -> Result<usize, ConversionError> {
+    pub fn convert_unticked(&self, unticked: &str) -> Result<u64, ConversionError> {
         let mut parts = unticked.split('.').take(2);
         let (int, fract) = match (parts.next(), parts.next()) {
             (Some(int), Some(fract)) => (int, fract),
@@ -51,8 +51,8 @@ impl Tick {
             (None, _) => return Err(ConversionError(*self)),
         };
 
-        let ratio: rational::Ratio<usize> = match Num::from_str_radix(
-            &format!("{}{}/{}", int, fract, 10_usize.pow(fract.len() as u32)),
+        let ratio: rational::Ratio<u64> = match Num::from_str_radix(
+            &format!("{}{}/{}", int, fract, 10_u64.pow(fract.len() as u32)),
             10
         )
         {
@@ -69,7 +69,10 @@ impl Tick {
         Ok(ratio.to_integer())
     }
 
-    pub fn convert_ticked(&self, ticked: usize) -> Result<String, ConversionError> {
+    /// Convert a value expressed in ticks back to an unticked value.
+    ///
+    /// Return an error if the number of ticks per unit does not divide some power of 10.
+    pub fn convert_ticked(&self, ticked: u64) -> Result<String, ConversionError> {
         let mut pow = 1;
         let mut pad = 0;
         while self.ticks_per_unit > pow {

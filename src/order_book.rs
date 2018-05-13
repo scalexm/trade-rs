@@ -7,8 +7,8 @@ use std::cell::Cell;
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// An order book.
 pub struct OrderBook {
-    ask: BTreeMap<Price, usize>,
-    bid: BTreeMap<Price, usize>,
+    ask: BTreeMap<Price, u64>,
+    bid: BTreeMap<Price, u64>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -31,7 +31,7 @@ pub struct LimitUpdate {
     pub price: Price,
 
     /// Updated size.
-    pub size: usize,
+    pub size: u64,
 }
 
 impl OrderBook {
@@ -58,7 +58,7 @@ impl OrderBook {
 
     /// Retrieve the size of the given limit.
     /// N.B.: `&mut self` because limits are initialized lazily.
-    pub fn size_at_limit(&mut self, side: Side, price: Price) -> usize {
+    pub fn size_at_limit(&mut self, side: Side, price: Price) -> u64 {
         let entry = match side {
             Side::Bid => self.bid.entry(price),
             Side::Ask => self.ask.entry(price),
@@ -88,14 +88,14 @@ pub fn display_size_tick(maybe_tick: Option<Tick>) {
     DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
 }
 
-fn convert_price(ticked: usize) -> String {
+fn convert_price(ticked: u64) -> String {
     match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.convert_ticked(ticked).unwrap(),
         None => format!("{}", ticked),
     }
 }
 
-fn convert_size(ticked: usize) -> String {
+fn convert_size(ticked: u64) -> String {
     match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.convert_ticked(ticked).unwrap(),
         None => format!("{}", ticked),

@@ -26,7 +26,7 @@ pub use tick::Tick;
 pub use order_book::OrderBook;
 
 /// A price, in ticks.
-pub type Price = usize;
+pub type Price = u64;
 
 /// An identifier which should uniquely determine a trader.
 pub type TraderId = usize;
@@ -35,13 +35,13 @@ pub type TraderId = usize;
 /// A liquidity consuming trade.
 pub struct Trade {
     /// Size consumed by the trade.
-    pub size: usize,
+    pub size: u64,
 
     // Trade timestamp.
-    pub time: usize,
+    pub time: u64,
 
     /// Price in ticks.
-    pub price: usize,
+    pub price: u64,
 
     /// ID of the buyer.
     pub buyer_id: TraderId,

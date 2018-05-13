@@ -8,6 +8,8 @@ use std::collections::{BTreeMap, Bound};
 use self::arena::{Index, Arena};
 use std::{mem, fmt};
 use crate::*;
+use notify::*;
+use std::time::Instant;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// Side of an order.
@@ -26,7 +28,7 @@ pub struct Order {
     pub price: Price,
 
     /// Order size, in atomic asset units.
-    pub size: usize,
+    pub size: u64,
 
     /// Order side: `Buy` or `Sell`.
     pub side: Side,
@@ -42,13 +44,15 @@ pub type EntryId = usize;
 /// A limit order at some price limit of the order book.
 struct BookEntry {
     /// Size of the limit order.
-    size: usize,
+    size: u64,
 
     /// Pointer to the next order at this price limit. If `None`, then this entry
     /// is the last one at this price limit.
     next: Option<Index>,
 
     id: EntryId,
+
+    owner: TraderId,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -94,30 +98,76 @@ enum ExecResult {
 }
 
 trait Executor {
-    fn exec(&mut self, link: &Link, order: Order) -> (Option<Index>, Order);
+    fn exec<N: Notifier>(
+        &mut self,
+        link: &Link,
+        order: Order,
+        notifier: &mut N
+    ) -> (Option<Index>, Order);
 
-    fn exec_range<'a, I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>>(
+    fn exec_range<'a, I, N: Notifier>(
         &mut self,
         order: Order,
-        range: I
-    ) -> (Price, ExecResult);
+        range: I,
+        notifier: &mut N
+    ) -> (Price, ExecResult) where I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>;
+
+    fn size_at_limit(&self, limit: &PriceLimit) -> u64;
 }
 
 impl Executor for BookEntries {
     /// Make an order cross through a price limit. Return the updated order (which accounts for
     /// how much the order was filled), as well as an `Index` which points to the first entry
     /// at this price limit which was not exhausted, if any.
-    fn exec(&mut self, link: &Link, mut order: Order) -> (Option<Index>, Order) {
+     fn exec<N: Notifier>(
+        &mut self,
+        link: &Link,
+        mut order: Order,
+        notifier: &mut N
+    ) -> (Option<Index>, Order)
+    {
+        let time = Instant::now().elapsed();
+        let time = time.as_secs() * 1000000000 + time.subsec_nanos() as u64;
+
         let mut maybe_index = Some(link.head);
         while let Some(index) = maybe_index {
             {
                 let entry = self.get_mut(index);
+                let buyer_id = match order.side {
+                    Side::Buy => order.owner,
+                    Side::Sell => entry.owner,
+                };
+                let seller_id = match order.side {
+                    Side::Buy => entry.owner,
+                    Side::Sell => order.owner,
+                };
+
                 if entry.size <= order.size {
+                    notifier.notify(
+                        Notification::Trade(Trade {
+                            size: entry.size,
+                            time,
+                            price: order.price,
+                            buyer_id,
+                            seller_id,
+                        })
+                    );
+
                     // This entry is exhausted by the incoming order.
                     order.size -= entry.size;
                     entry.size = 0;
                     maybe_index = entry.next;
                 } else {
+                    notifier.notify(
+                        Notification::Trade(Trade {
+                            size: order.size,
+                            time,
+                            price: order.price,
+                            buyer_id,
+                            seller_id,
+                        })
+                    );
+
                     // The order has been completely filled.
                     entry.size -= order.size;
                     order.size = 0;
@@ -137,16 +187,17 @@ impl Executor for BookEntries {
     ///   `updated_order` accounting for how much the order was filled
     ///   updated depending on the side of the order.
     /// * `ExecResult::NotExecuted` if the range was empty.
-    fn exec_range<'a, I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>>(
+    fn exec_range<'a, I, N: Notifier>(
         &mut self,
         mut order: Order,
-        range: I
-    ) -> (Price, ExecResult)
+        range: I,
+        notifier: &mut N
+    ) -> (Price, ExecResult) where I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>
     {
         let mut exec_result = ExecResult::NotExecuted;
         for (price, limit) in range {
             if let Some(ref link) = limit.link {
-                let (maybe_index, new_order) = self.exec(link, order.clone());
+                let (maybe_index, new_order) = self.exec(link, order.clone(), notifier);
                 order = new_order;
                 exec_result = ExecResult::Filled(order.clone());
 
@@ -170,6 +221,23 @@ impl Executor for BookEntries {
             Side::Sell => (order.price - 1, exec_result),
         }
     }
+
+    /// Compute the total size of a given limit.
+    fn size_at_limit(&self, limit: &PriceLimit) -> u64 {
+        match limit.link {
+            Some(ref link) => {
+                let mut count = 0;
+                let mut maybe_index = Some(link.head);
+                while let Some(index) = maybe_index {
+                    let entry = self.get(index);
+                    count += entry.size;
+                    maybe_index = entry.next;
+                }
+                count
+            },
+            None => 0,
+        }
+    }
 }
 
 impl MatchingEngine {
@@ -190,37 +258,21 @@ impl MatchingEngine {
     }
 
     /// Retrieve the size of the limit at the given price.
-    pub fn size_at_price(&self, price: Price) -> usize {
+    pub fn size_at_price(&self, price: Price) -> u64 {
         if let Some(limit) = self.price_limits.get(&price) {
-            return self.size_at_limit(limit);
+            return self.entries.size_at_limit(limit);
         }
         0
     }
 
-    /// Compute the total size of a given limit.
-    fn size_at_limit(&self, limit: &PriceLimit) -> usize {
-        match limit.link {
-            Some(ref link) => {
-                let mut count = 0;
-                let mut maybe_index = Some(link.head);
-                while let Some(index) = maybe_index {
-                    let entry = self.entries.get(index);
-                    count += entry.size;
-                    maybe_index = entry.next;
-                }
-                count
-            },
-            None => 0,
-        }
-    }
-
     /// Insert an order in the order book, and update best limits consequently.
-    fn insert_order(&mut self, order: Order) -> EntryId {
+    fn insert_order<N: Notifier>(&mut self, order: Order, notifier: &mut N) -> EntryId {
         let id = self.max_entry_id;
         let index = self.entries.alloc(BookEntry {
             size: order.size,
             next: None,
             id,
+            owner: order.owner,
         });
 
         self.max_entry_id += 1;
@@ -241,6 +293,17 @@ impl MatchingEngine {
             }));
         }
 
+        notifier.notify(
+            Notification::LimitUpdates(vec![order_book::LimitUpdate {
+                side: match order.side {
+                    Side::Buy => order_book::Side::Bid,
+                    Side::Sell => order_book::Side::Ask,
+                },
+                price: order.price,
+                size: self.entries.size_at_limit(price_point)
+            }])
+        );
+
         match order.side {
             Side::Buy if order.price > self.best_bid => {
                 self.best_bid = order.price;
@@ -254,21 +317,21 @@ impl MatchingEngine {
         id
     }
 
-    /// Match or insert a limit order. If the order was inserted in the order book, return the
-    /// corresponding `EntryId`.
-    pub fn limit(&mut self, order: Order) -> Option<EntryId> {
+    pub fn limit_with_notifier<N: Notifier>(&mut self, order: Order, notifier: &mut N)
+        -> Option<EntryId>
+    {
         let (new_price, exec_result) = match order.side {
             Side::Buy if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(self.best_ask), Bound::Included(order.price))
                 );
-                self.entries.exec_range(order.clone(), range)
+                self.entries.exec_range(order.clone(), range, notifier)
             },
             Side::Sell if order.price <= self.best_bid => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(order.price), Bound::Included(self.best_bid))
                 ).rev();
-                self.entries.exec_range(order.clone(), range)
+                self.entries.exec_range(order.clone(), range, notifier)
             },
             _ => (0, ExecResult::NotExecuted)
         };
@@ -277,7 +340,7 @@ impl MatchingEngine {
             // The previous range was empty, i.e. the limit order is not marketable and should
             // be inserted in the order book.
             ExecResult::NotExecuted => {
-                Some(self.insert_order(order))
+                Some(self.insert_order(order, notifier))
             },
             ExecResult::Filled(updated_order) => {
                 // Go find the new best limit.
@@ -306,12 +369,18 @@ impl MatchingEngine {
 
                 // The order has exhausted the whole range, we insert what remains.
                 if updated_order.size > 0 {
-                    Some(self.insert_order(updated_order))
+                    Some(self.insert_order(updated_order, notifier))
                 } else {
                     None
                 }
             }
         }
+    }
+
+    /// Match or insert a limit order. If the order was inserted in the order book, return the
+    /// corresponding `EntryId`.
+    pub fn limit(&mut self, order: Order) -> Option<EntryId> {
+        self.limit_with_notifier(order, &mut TrivialNotifier)
     }
 }
 
@@ -324,9 +393,9 @@ impl fmt::Display for MatchingEngine {
                 write!(f, "--- BID ---\n")?;
                 bid = false;
             }
-            let size = self.size_at_limit(limit);
+            let size = self.entries.size_at_limit(limit);
             if size > 0 {
-                write!(f, "{}: {}\n", price, self.size_at_limit(limit))?;
+                write!(f, "{}: {}\n", price, self.entries.size_at_limit(limit))?;
             }
         }
         if bid {
