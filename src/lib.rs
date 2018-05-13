@@ -12,6 +12,7 @@ extern crate serde;
 extern crate hyper;
 extern crate hyper_tls;
 #[macro_use] extern crate log;
+extern crate num;
 
 pub mod matching_engine;
 pub mod queue_reactive;

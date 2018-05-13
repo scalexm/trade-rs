@@ -1,9 +1,11 @@
 mod test;
 
 use std::fmt;
+use num::*;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// An object carrying the number of ticks per unit of something.
+/// An object carrying the number of ticks per unit of something
+/// and representative of its tick size.
 /// 
 /// Example: BTC is quoted on exchanges up to a precision of 1e-8, i.e.
 /// the tick size is 1e-8, so the number of ticks per unit would be 1e8.
@@ -16,11 +18,11 @@ pub struct Tick {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
 /// An error which indicated that the conversion of an unticked value to a
 /// value in ticks has failed.
-pub struct ConversionError(String, Tick);
+pub struct ConversionError(Tick);
 
 impl fmt::Display for ConversionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Failed to convert unticked value {} with tick {:?}", self.0, self.1)
+        write!(f, "Failed to convert unticked value with tick {:?}", self.0)
     }
 }
 
@@ -46,46 +48,45 @@ impl Tick {
         let (int, fract) = match (parts.next(), parts.next()) {
             (Some(int), Some(fract)) => (int, fract),
             (Some(int), None) => (int, ""),
-            (None, _) => return Err(ConversionError(unticked.to_owned(), *self)),
+            (None, _) => return Err(ConversionError(*self)),
         };
 
-        if parts.next().is_some() {
-            return Err(ConversionError(unticked.to_owned(), *self));
+        let ratio: rational::Ratio<usize> = match Num::from_str_radix(
+            &format!("{}{}/{}", int, fract, 10_usize.pow(fract.len() as u32)),
+            10
+        )
+        {
+            Ok(result) => result,
+            Err(..) => return Err(ConversionError(*self)),
+        };
+
+        let ratio = rational::Ratio::from_integer(self.ticks_per_unit) * ratio;
+
+        if !ratio.is_integer() {
+            return Err(ConversionError(*self));
         }
 
-        let int = if int.is_empty() {
-            0
-        } else {
-            match int.parse() {
-                Ok(int) => int,
-                Err(..) => return Err(ConversionError(unticked.to_owned(), *self)),
-            }
-        };
+        Ok(ratio.to_integer())
+    }
 
-        let (fract, divisor) = if fract.is_empty() {
-            (0, 1)
-        } else {
-            let trailing_zeros = fract.chars().rev().take_while(|&c| c == '0').count();
-            if trailing_zeros == fract.len() {
-                (0, 1)
-            } else {
-                let preceding_zeros = fract.chars().take_while(|&c| c == '0').count();
-                let part_without_zeros = &fract[preceding_zeros .. (fract.len() - trailing_zeros)];
-
-                let fract = match part_without_zeros.parse() {
-                    Ok(fract) => fract,
-                    Err(..) => return Err(ConversionError(unticked.to_owned(), *self)),
-                };
-                (fract, 10_usize.pow((part_without_zeros.len() + preceding_zeros) as _))
-            }
-        };
-
-        let mut value = self.ticks_per_unit * fract;
-        if value % divisor != 0 {
-            return Err(ConversionError(unticked.to_owned(), *self));
+    pub fn convert_ticked(&self, ticked: usize) -> Result<String, ConversionError> {
+        let mut pow = 1;
+        let mut pad = 0;
+        while self.ticks_per_unit > pow {
+            pad += 1;
+            pow *= 10;
         }
-        value /= divisor;
 
-        Ok(int * self.ticks_per_unit + value)
+        if pow % self.ticks_per_unit != 0 {
+            return Err(ConversionError(*self));
+        }
+
+        let int = ticked / self.ticks_per_unit;
+        Ok(format!(
+                "{0}.{1:02$}",
+            int,
+            (pow * ticked / self.ticks_per_unit) % pow,
+            pad
+        ))
     }
 }

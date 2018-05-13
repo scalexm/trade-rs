@@ -105,3 +105,35 @@ fn bad_divisor() {
         Tick::new(10).convert_unticked("5.11").is_err()
     );
 }
+
+#[test]
+fn convert_ticked() {
+    assert_eq!(
+        Ok("1.15".to_owned()),
+        Tick::new(100).convert_ticked(Tick::new(100).convert_unticked("1.15").unwrap())
+    );
+
+    assert_eq!(
+        Ok("1.01".to_owned()),
+        Tick::new(100).convert_ticked(Tick::new(100).convert_unticked("1.01").unwrap())
+    );
+
+    assert_eq!(
+        Ok("0.15".to_owned()),
+        Tick::new(20).convert_ticked(Tick::new(20).convert_unticked("0.15").unwrap())
+    );
+
+    assert_eq!(
+        Ok("75.5".to_owned()),
+        Tick::new(2).convert_ticked(Tick::new(2).convert_unticked("75.5").unwrap())
+    );
+
+    assert_eq!(
+        Ok("1.00".to_owned()),
+        Tick::new(20).convert_ticked(Tick::new(20).convert_unticked("1").unwrap())
+    );
+
+    assert!(
+        Tick::new(23).convert_ticked(Tick::new(10).convert_unticked("75.4").unwrap()).is_err()
+    );
+}

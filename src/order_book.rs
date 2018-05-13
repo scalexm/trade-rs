@@ -2,6 +2,7 @@ use crate::*;
 use std::fmt;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::cell::Cell;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// An order book.
@@ -66,22 +67,60 @@ impl OrderBook {
     }
 }
 
-const DISPLAY_LIMIT: usize = 5;
+thread_local! {
+    static DISPLAY_LIMIT: Cell<usize> = Cell::new(5);
+    static DISPLAY_PRICE_TICK: Cell<Option<Tick>> = Cell::new(None);
+    static DISPLAY_SIZE_TICK: Cell<Option<Tick>> = Cell::new(None);
+}
+
+/// Set the thread local display limit for both sides when displaying an order book. 
+pub fn display_limit(limit: usize) {
+    DISPLAY_LIMIT.with(|dl| dl.set(limit));
+}
+
+/// Set the tread local tick size for displaying prices. If `None`, values are displayed in ticks.
+pub fn display_price_tick(maybe_tick: Option<Tick>) {
+    DISPLAY_PRICE_TICK.with(|dt| dt.set(maybe_tick));
+}
+
+/// Set the tread local tick size for displaying sizes. If `None`, values are displayed in ticks.
+pub fn display_size_tick(maybe_tick: Option<Tick>) {
+    DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
+}
+
+fn convert_price(ticked: usize) -> String {
+    match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
+        Some(tick) => tick.convert_ticked(ticked).unwrap(),
+        None => format!("{}", ticked),
+    }
+}
+
+fn convert_size(ticked: usize) -> String {
+    match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
+        Some(tick) => tick.convert_ticked(ticked).unwrap(),
+        None => format!("{}", ticked),
+    }
+}
 
 impl fmt::Display for OrderBook {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_limit = DISPLAY_LIMIT.with(|dl| dl.get());
+
         write!(f, "--- ASK ---\n")?;
-        for (&price, &size) in self.ask.iter().rev().take(DISPLAY_LIMIT) {
+        let ask: Vec<_> = self.ask.iter().take(display_limit).collect();
+        for (&price, &size) in ask.iter().rev() {
             if size > 0 {
-                write!(f, "{}: {}\n", price, size)?;
+                write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
             }
         }
+
         write!(f, "--- BID ---\n")?;
-        for (&price, &size) in self.bid.iter().take(DISPLAY_LIMIT) {
+        for (&price, &size) in self.bid.iter().rev().take(display_limit) {
             if size > 0 {
-                write!(f, "{}: {}\n", price, size)?;
+                write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
             }
         }
+
         Ok(())
     }
 }

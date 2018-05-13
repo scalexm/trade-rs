@@ -1,6 +1,5 @@
 extern crate trade_rs;
 extern crate futures;
-extern crate hyper;
 extern crate env_logger;
 
 use trade_rs::api::*;
@@ -9,8 +8,6 @@ use trade_rs::Tick;
 use futures::prelude::*;
 
 fn main() {
-    env_logger::init();
-
     let client = binance::Client::new(binance::Params {
         symbol: "btcusdt".to_owned(),
         ws_address: "wss://stream.binance.com:9443".to_owned(),
@@ -18,6 +15,9 @@ fn main() {
         price_tick: Tick::new(100),
         size_tick: Tick::new(1000000),
     });
+
+    trade_rs::order_book::display_price_tick(Some(Tick::new(100)));
+    trade_rs::order_book::display_size_tick(Some(Tick::new(1000000)));
 
     let mut order_book = trade_rs::OrderBook::new();
 
