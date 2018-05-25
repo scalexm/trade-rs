@@ -4,46 +4,12 @@ use std::thread;
 use ws;
 use ws::util::{Timeout, Token};
 use serde_json;
-use futures::channel::mpsc::*;
+use futures::sync::mpsc::*;
 use futures::prelude::*;
-use hyper::rt::{Stream as HyperStream, Future as HyperFuture};
 use tick::*;
 use std::mem;
-use order_book::{Side, LimitUpdate};
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-/// Params needed for a binance API client.
-pub struct Params {
-    /// Currency symbol in lower case, e.g. "trxbtc".
-    pub symbol: String,
-
-    /// WebSocket API address.
-    pub ws_address: String,
-
-    /// HTTP REST API address.
-    pub http_address: String,
-
-    /// Tick unit for prices.
-    pub price_tick: Tick,
-
-    /// Tick unit for sizes.
-    pub size_tick: Tick,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-/// A binance API client.
-pub struct Client {
-    params: Params,
-}
-
-impl Client {
-    /// Create a new API client with given `params`.
-    pub fn new(params: Params) -> Self {
-        Client {
-            params,
-        }
-    }
-}
+use order_book::LimitUpdate;
+use super::{RestError, Params};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum InternalAction {
@@ -57,7 +23,7 @@ pub struct BinanceStream {
 }
 
 impl BinanceStream {
-    fn new(params: Params) -> Self {
+    crate fn new(params: Params) -> Self {
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
             let address = format!(
@@ -88,26 +54,17 @@ impl BinanceStream {
 
 impl Stream for BinanceStream {
     type Item = Notification;
-    type Error = Never;
+    type Error = ();
 
-    fn poll_next(&mut self, cx: &mut task::Context)
-        -> Result<Async<Option<Self::Item>>, Self::Error>
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error>
     {
-        let action = try_ready!(self.rcv.poll_next(cx));
+        let action = try_ready!(self.rcv.poll());
         Ok(
             Async::Ready(match action {
                 Some(InternalAction::Notify(notif)) => Some(notif),
                 None => None,
             })
         )
-    }
-}
-
-impl ApiClient for Client {
-    type Stream = BinanceStream;
-
-    fn stream(&self) -> BinanceStream {
-        BinanceStream::new(self.params.clone())
     }
 }
 
@@ -323,19 +280,8 @@ impl ws::Handler for Handler {
                     BookSnapshotState::Ok => panic!("book snapshot timeout not supposed to happen"),
 
                     BookSnapshotState::Waiting(mut rcv, events) => {
-                        let result = match rcv.try_next() {
-                            Ok(result) => result,
-
-                            // The only `Sender` has somehow disconnected, we won't receive
-                            // the book hence we cannot continue.
-                            Err(..) => {
-                                error!("LOB sender has disconnected");
-                                self.out.shutdown().unwrap();
-                                return Ok(());
-                            }
-                        };
-                        match result {
-                            Some(book) => {
+                        match rcv.poll().unwrap() {
+                            Async::Ready(Some(book)) => {
                                 info!("Received LOB snapshot");
                                 if let Err(err) = self.process_book_snapshot(book, events) {
                                     error!("LOB processing encountered error `{:?}`", err);
@@ -346,13 +292,21 @@ impl ws::Handler for Handler {
                             },
 
                             // The snapshot request has not completed yet, we wait some more.
-                            None => {
+                            Async::NotReady => {
                                 self.book_snapshot_state = BookSnapshotState::Waiting(
                                     rcv,
                                     events
                                 );
                                 self.out.timeout(BOOK_SNAPSHOT_TIMEOUT, BOOK_SNAPSHOT)?
                             },
+
+                            // The only `Sender` has somehow disconnected, we won't receive
+                            // the book hence we cannot continue.
+                            Async::Ready(None) => {
+                                error!("LOB sender has disconnected");
+                                self.out.shutdown().unwrap();
+                                return Ok(());
+                            }
                         }
                     },
                 };
@@ -414,18 +368,28 @@ impl ws::Handler for Handler {
                             let mut cloned_snd = snd.clone();
                             let https = hyper_tls::HttpsConnector::new(2).unwrap();
                             let client = hyper::Client::builder().build::<_, hyper::Body>(https);
-                            let fut = client.get(address.parse().unwrap()).and_then(|res| {
-                                res.into_body().concat2()
-                            }).and_then(move |body| {
-                                let snapshot = serde_json::from_slice(&body);
+                            let fut = client.get(address.parse().unwrap()).and_then(move |res| {
+                                let status = res.status();
+                                res.into_body().concat2().and_then(move |body| {
+                                    if status != hyper::StatusCode::OK {
+                                        let _ = snd.try_send(
+                                            Err(RestError::from_status_code(status))
+                                                .map_err(From::from)
+                                        );
+                                        return Ok(());
+                                    }
 
-                                // FIXME: If `try_send` fails, then it means that the `Handler`
-                                // was dropped?
-                                let _ = snd.try_send(snapshot.map_err(From::from));
-                                Ok(())
+                                    let snapshot = serde_json::from_slice(&body);
+
+                                    // FIXME: If `try_send` fails, then it means that the `Handler`
+                                    // was dropped?
+                                    let _ = snd.try_send(snapshot.map_err(From::from));
+                                    Ok(())
+                                })
                             }).map_err(move |err| {
                                 let _ = cloned_snd.try_send(Err(format_err!("{:?}", err)));
                             });
+
                             hyper::rt::run(fut);
                         });
 

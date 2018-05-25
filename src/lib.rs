@@ -9,13 +9,14 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
-extern crate hyper;
+#[macro_use] extern crate hyper;
 extern crate hyper_tls;
 #[macro_use] extern crate log;
 extern crate num;
+extern crate openssl;
+extern crate hex;
 
 pub mod matching_engine;
-pub mod queue_reactive;
 pub mod notify;
 pub mod api;
 pub mod order_book;
@@ -33,6 +34,16 @@ pub type Size = u64;
 
 /// An identifier which should uniquely determine a trader.
 pub type TraderId = usize;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// Side of a trade (bid or ask).
+pub enum Side {
+    /// Bid side.
+    Bid,
+
+    /// Ask side.
+    Ask,
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// A liquidity consuming trade.

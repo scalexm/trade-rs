@@ -296,8 +296,8 @@ impl MatchingEngine {
         notifier.notify(
             Notification::LimitUpdates(vec![order_book::LimitUpdate {
                 side: match order.side {
-                    Side::Buy => order_book::Side::Bid,
-                    Side::Sell => order_book::Side::Ask,
+                    Side::Buy => ::Side::Bid,
+                    Side::Sell => ::Side::Ask,
                 },
                 price: order.price,
                 size: self.entries.size_at_limit(price_point)

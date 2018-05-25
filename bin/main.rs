@@ -6,6 +6,7 @@ use trade_rs::api::*;
 use trade_rs::notify::Notification;
 use trade_rs::Tick;
 use futures::prelude::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
     let client = binance::Client::new(binance::Params {
@@ -14,26 +15,34 @@ fn main() {
         http_address: "https://www.binance.com".to_owned(),
         price_tick: Tick::new(100),
         size_tick: Tick::new(1000000),
+        api_key: String::new(),
+        secret_key: String::new(),
     });
-
-    trade_rs::order_book::display_price_tick(Some(Tick::new(100)));
-    trade_rs::order_book::display_size_tick(Some(Tick::new(1000000)));
-
-    let mut order_book = trade_rs::OrderBook::new();
 
     let fut = client.stream().for_each(|notif| {
         match notif {
             Notification::Trade(trade) => {
-                println!("{:?}", trade)
+                println!(
+                    "trade,{},{},{}",
+                    trade.time,
+                    Tick::new(100).convert_ticked(trade.price).unwrap(),
+                    Tick::new(1000000).convert_ticked(trade.size).unwrap()
+                );
             }
             Notification::LimitUpdates(updates) => {
+                let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 for update in updates {
-                    order_book.update(update);
+                    println!(
+                        "update,{},{:?},{},{}",
+                        time.as_secs() + time.subsec_millis() as u64,
+                        update.side,
+                        Tick::new(100).convert_ticked(update.price).unwrap(),
+                        Tick::new(1000000).convert_ticked(update.size).unwrap()
+                    );
                 }
-                println!("{}", order_book);
             },
         };
         Ok(())
     });
-    futures::executor::block_on(fut).unwrap();
+    fut.wait().unwrap();
 }

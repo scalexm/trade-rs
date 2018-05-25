@@ -4,20 +4,22 @@ version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
 
 [dependencies]
-serde_json = "1.0"
-serde = "1.0"
-serde_derive = "1.0"
-futures = "0.2.1"
-failure = "0.1.1"
-failure_derive = "0.1.1"
+serde_json = "^1.0"
+serde = "^1.0"
+serde_derive = "^1.0"
+futures = "0.1.17"
+failure = "^0.1"
+failure_derive = "^0.1"
 hyper = { git = "https://github.com/hyperium/hyper" }
 hyper-tls = { git = "https://github.com/hyperium/hyper-tls" }
-log = "0.4.0"
-env_logger = "0.5.10"
-num = "0.1"
+log = "^0.4"
+env_logger = "^0.5"
+num = "^0.1"
+openssl = "^0.10"
+hex = "^0.3"
 
 [dependencies.ws]
-version = "0.7.6"
+version = "^0.7"
 features = ["ssl"]
 
 [[bin]]

@@ -12,16 +12,6 @@ pub struct OrderBook {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// Side of a trade (bid or ask).
-pub enum Side {
-    /// Bid side.
-    Bid,
-
-    /// Ask side.
-    Ask,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// Represent a limit update of the order book.
 pub struct LimitUpdate {
     /// Side of the corresponding limit.
