@@ -3,7 +3,6 @@ pub mod binance;
 use crate::*;
 use notify::Notification;
 use futures::prelude::*;
-use failure::*;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// See https://www.investopedia.com/terms/t/timeinforce.asp.

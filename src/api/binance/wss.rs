@@ -10,6 +10,7 @@ use tick::*;
 use std::mem;
 use order_book::LimitUpdate;
 use super::{RestError, Params};
+use failure::Error;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum InternalAction {
@@ -29,7 +30,7 @@ impl BinanceStream {
             let address = format!(
                "{0}/ws/{1}@trade/{1}@depth",
                 params.ws_address,
-                params.symbol
+                params.symbol.to_lowercase()
             );
             info!("Initiating WebSocket connection at {}", address);
             
@@ -56,8 +57,7 @@ impl Stream for BinanceStream {
     type Item = Notification;
     type Error = ();
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error>
-    {
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let action = try_ready!(self.rcv.poll());
         Ok(
             Async::Ready(match action {
@@ -160,7 +160,7 @@ impl Handler {
         if let Err(..) = self.snd.unbounded_send(action) {
             // The corresponding receiver was dropped, this connection does not make sense
             // anymore.
-            self.out.shutdown().unwrap();
+            self.out.shutdown().expect("shutdown error");
         }
     }
 
@@ -284,10 +284,10 @@ impl ws::Handler for Handler {
                             Async::Ready(Some(book)) => {
                                 info!("Received LOB snapshot");
                                 if let Err(err) = self.process_book_snapshot(book, events) {
-                                    error!("LOB processing encountered error `{:?}`", err);
+                                    error!("LOB processing encountered error: {}", err);
                                     
                                     // We cannot continue without the book, we shutdown.
-                                    self.out.shutdown().unwrap();
+                                    self.out.shutdown().expect("shutdown error");
                                 }
                             },
 
@@ -304,7 +304,7 @@ impl ws::Handler for Handler {
                             // the book hence we cannot continue.
                             Async::Ready(None) => {
                                 error!("LOB sender has disconnected");
-                                self.out.shutdown().unwrap();
+                                self.out.shutdown().expect("shutdown error");
                                 return Ok(());
                             }
                         }
@@ -360,34 +360,34 @@ impl ws::Handler for Handler {
                             "{}/api/v1/depth?symbol={}&limit=1000",
                             self.params.http_address,
                             self.params.symbol.to_uppercase()
-                        );
+                        ).parse().expect("invalid address");
 
                         info!("Initiating LOB request at {}", address);
 
                         thread::spawn(move || {
-                            let mut cloned_snd = snd.clone();
-                            let https = hyper_tls::HttpsConnector::new(2).unwrap();
+                            let https = match hyper_tls::HttpsConnector::new(2) {
+                                Ok(https) => https,
+                                Err(err) => {
+                                    let _ = snd.try_send(Err(err).map_err(From::from));
+                                    return;
+                                }
+                            };
+
                             let client = hyper::Client::builder().build::<_, hyper::Body>(https);
-                            let fut = client.get(address.parse().unwrap()).and_then(move |res| {
+                            let fut = client.get(address).and_then(|res| {
                                 let status = res.status();
                                 res.into_body().concat2().and_then(move |body| {
-                                    if status != hyper::StatusCode::OK {
-                                        let _ = snd.try_send(
-                                            Err(RestError::from_status_code(status))
-                                                .map_err(From::from)
-                                        );
-                                        return Ok(());
-                                    }
-
-                                    let snapshot = serde_json::from_slice(&body);
-
-                                    // FIXME: If `try_send` fails, then it means that the `Handler`
-                                    // was dropped?
-                                    let _ = snd.try_send(snapshot.map_err(From::from));
-                                    Ok(())
+                                    Ok((status, body))
                                 })
-                            }).map_err(move |err| {
-                                let _ = cloned_snd.try_send(Err(format_err!("{:?}", err)));
+                            }).map_err(From::from).and_then(move |(status, body)| {
+                                if status != hyper::StatusCode::OK {
+                                    Err(RestError::from_status_code(status))?;
+                                }
+
+                                Ok(serde_json::from_slice(&body)?)
+                            }).then(move |res| {
+                                let _ = snd.try_send(res);
+                                Ok(())
                             });
 
                             hyper::rt::run(fut);

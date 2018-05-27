@@ -6,6 +6,7 @@ use openssl::hash::MessageDigest;
 use hex;
 use hyper::{Method, Request, Body};
 use std::time::{SystemTime, UNIX_EPOCH};
+use failure::Error;
 
 struct QueryString {
     query: String,
@@ -62,7 +63,7 @@ impl AsStr for TimeInForce {
 }
 
 impl Client {
-    fn order(&self, order: Order) {
+    fn order(&self, order: Order) -> Box<Future<Item = (), Error = Error>> {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.to_uppercase());
         query.push("side", order.side.as_str());
@@ -91,10 +92,19 @@ impl Client {
             .body(Body::empty())
             .unwrap();
         
-        let https = hyper_tls::HttpsConnector::new(2).unwrap();
+        let https = match hyper_tls::HttpsConnector::new(2) {
+            Ok(https) => https,
+            Err(err) => panic!("failed to initialize https connector: {}", err),
+        };
         let client = hyper::Client::builder().build::<_, hyper::Body>(https);
         let fut = client.request(request).and_then(|res| {
+            let status = res.status();
+            res.into_body().concat2().and_then(move |body| {
+                Ok((status, body))
+            })
+        }).map_err(From::from).and_then(|(status, body)| {
             Ok(())
         });
+        Box::new(fut)
     }
 }

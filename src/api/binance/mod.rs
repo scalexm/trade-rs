@@ -5,6 +5,7 @@ use api::*;
 use tick::Tick;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
+use std::error::Error;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Params needed for a binance API client.
@@ -126,8 +127,12 @@ impl RestError {
 impl Client {
     /// Create a new API client with given `params`.
     pub fn new(params: Params) -> Self {
+        let secret_key = match PKey::hmac(params.secret_key.as_bytes()) {
+            Ok(secret_key) => secret_key,
+            Err(err) => panic!("error while parsing HMAC: {}", err),
+        };
         Client {
-            secret_key: PKey::hmac(params.secret_key.as_bytes()).unwrap(),
+            secret_key,
             params,
         }
     }

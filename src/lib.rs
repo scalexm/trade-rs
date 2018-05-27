@@ -22,7 +22,6 @@ pub mod api;
 pub mod order_book;
 pub mod tick;
 
-pub use failure::Error;
 pub use tick::Tick;
 pub use order_book::OrderBook;
 
