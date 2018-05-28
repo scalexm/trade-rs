@@ -125,15 +125,6 @@ impl Executor for BookEntries {
         while let Some(index) = maybe_index {
             {
                 let entry = self.get_mut(index);
-                let buyer_id = match order.side {
-                    Side::Buy => order.owner,
-                    Side::Sell => entry.owner,
-                };
-                let seller_id = match order.side {
-                    Side::Buy => entry.owner,
-                    Side::Sell => order.owner,
-                };
-
                 if entry.size <= order.size {
                     // This entry is exhausted by the incoming order.
                     order.size -= entry.size;

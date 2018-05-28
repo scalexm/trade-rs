@@ -1,3 +1,6 @@
+// `Timeout`, `Token`
+#![allow(deprecated)]
+
 use crate::*;
 use api::*;
 use std::{mem, thread};
@@ -5,7 +8,6 @@ use ws::{self, util::{Timeout, Token}};
 use serde_json;
 use futures::{prelude::*, sync::mpsc::*};
 use super::{RestError, Params};
-use failure::Error;
 
 #[derive(Debug)]
 /// `Stream` implementor representing a binance WebSocket stream.
@@ -33,7 +35,7 @@ impl BinanceStream {
                 previous_u: None,
             })
             {
-                error!("WebSocket connection terminated with error `{:?}`", err);
+                error!(r#"WebSocket connection terminated with error: "{}""#, err);
             }   
         });
         
@@ -216,7 +218,7 @@ impl Handler {
         &mut self,
         snapshot: Result<BinanceBookSnapshot, Error>,
         passed_events: Vec<LimitUpdates>
-    ) -> Result<(), Error>
+    ) -> Result<Vec<Notification>, Error>
     {
         let snapshot = snapshot?;
         let bid = snapshot.bids.iter().map(|l| self.convert_binance_update(l, Side::Bid));
@@ -233,12 +235,7 @@ impl Handler {
                          .map(|update| Notification::LimitUpdates(update.updates))
         );
 
-        for notif in notifs {
-            self.send(notif);
-        }
-
-        self.book_snapshot_state = BookSnapshotState::Ok;
-        Ok(())
+        Ok(notifs.collect())
     }
 }
 
@@ -274,11 +271,19 @@ impl ws::Handler for Handler {
                         match rcv.poll().unwrap() {
                             Async::Ready(Some(book)) => {
                                 info!("Received LOB snapshot");
-                                if let Err(err) = self.process_book_snapshot(book, events) {
-                                    error!("LOB processing encountered error: {}", err);
+                                match self.process_book_snapshot(book, events) {
+                                    Ok(notifs) => {
+                                        for notif in notifs {
+                                            self.send(notif)?
+                                        }
+                                        self.book_snapshot_state = BookSnapshotState::Ok;
+                                    },
+                                    Err(err) => {
+                                        error!(r#"LOB processing encountered error: "{}""#, err);
                                     
-                                    // We cannot continue without the book, we shutdown.
-                                    self.out.shutdown()?;
+                                        // We cannot continue without the book, we shutdown.
+                                        self.out.shutdown()?;
+                                    }
                                 }
                             },
 
@@ -296,14 +301,13 @@ impl ws::Handler for Handler {
                             Async::Ready(None) => {
                                 error!("LOB sender has disconnected");
                                 self.out.shutdown()?;
-                                return Ok(());
                             }
                         }
                     },
                 };
                 Ok(())
             }
-            _ => Err(ws::Error::new(ws::ErrorKind::Internal, "Invalid timeout token encountered!")),
+            _ => Err(ws::Error::new(ws::ErrorKind::Internal, "invalid timeout token encountered")),
         }
     }
 
@@ -407,7 +411,7 @@ impl ws::Handler for Handler {
                 Ok(None) => (),
 
                 Err(err) => {
-                    error!("Message parsing encountered error {:?}", err)
+                    error!(r#"Message parsing encountered error: "{}""#, err)
                 }
             };
         }

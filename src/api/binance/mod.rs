@@ -40,27 +40,36 @@ pub struct Client {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
 pub enum RestError {
     #[fail(display = "malformed request")]
+    /// Malformed request, issue on the lib side.
     MalformedRequest,
 
     #[fail(display = "broke rate limit")]
+    /// The client broke the request rate limit set by binance. See binance API
+    /// documentation for each request weight. A user shouldn't send any more requests
+    /// after receiving such an error, or their IP address will be banned.
     BrokeRateLimit,
 
     #[fail(display = "ip address was banned")]
+    /// IP address was banned.
     AddressBanned,
 
     #[fail(display = "server did not respond within the timeout period")]
+    /// The server did not respond in time. The order may have been executed or may have not.
     Timeout,
 
     #[fail(display = "binance internal error")]
+    /// Issue on binance side.
     BinanceInternalError,
 
     #[fail(display = "error {}: {}", code, msg)]
+    /// Custom error message in the response body.
     Custom {
         code: i32,
         msg: String,
     },
 
     #[fail(display = "unknown error")]
+    /// Unkown error.
     Unknown,
 }
 
@@ -139,8 +148,13 @@ impl Client {
 
 impl ApiClient for Client {
     type Stream = wss::BinanceStream;
+    type Future = Box<Future<Item = OrderAck, Error = Error>>;
 
-    fn stream(&self) -> wss::BinanceStream {
+    fn stream(&self) -> Self::Stream {
         wss::BinanceStream::new(self.params.clone())
+    }
+
+    fn order(&self, order: Order) -> Self::Future {
+        self.order_impl(order)
     }
 }

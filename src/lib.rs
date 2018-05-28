@@ -5,7 +5,6 @@
 extern crate ws;
 #[macro_use] extern crate futures;
 extern crate serde_json;
-extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
@@ -20,6 +19,8 @@ pub mod matching_engine;
 pub mod api;
 pub mod order_book;
 pub mod tick;
+
+pub use failure::Error;
 
 pub use tick::*;
 pub use order_book::*;

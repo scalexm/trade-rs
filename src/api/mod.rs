@@ -29,9 +29,20 @@ pub struct Order {
     /// Delay until the order is canceled if not treated by the server.
     pub time_window: u64,
 
-    /// Unique order id used to identify the order, stringified.
+    /// Unique id used to identify this order, stringified.
     /// Automatically generated if `None`.
     pub order_id: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// An order to cancel a previous order.
+pub struct Cancel {
+    /// Identify the order to be canceled.
+    pub order_id: String,
+
+    /// Unique id used to identify this cancel order, stringified.
+    /// Automatically generated if `None`.
+    pub cancel_id: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -42,6 +53,13 @@ pub struct OrderAck {
 
     /// Time at which the order was treated.
     time: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// An acknowledgment that a cancel order has been treated by the server.
+pub struct CancelAck {
+    /// ID identifying the cancel order.
+    cancel_id: String,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -56,12 +74,17 @@ pub enum Notification {
 
 /// A trait implemented by clients of various exchanges API.
 pub trait ApiClient {
-    /// Type of the underlying `Stream` implementor.
+    /// Type returned by the `stream` implementor, used for continuously receiving
+    /// notifications.
     type Stream: Stream<Item = Notification, Error = ()>;
-    //type Future: Future<Item = OrderAck, Error = Error>;
+
+    /// Type returned by the `order` implementor, used for awaiting the execution of
+    /// an order.
+    type Future: Future<Item = OrderAck, Error = Error>;
 
     /// Start streaming notifications.
     fn stream(&self) -> Self::Stream;
 
-    //fn order(&self, order: Order) -> Self::Future;
+    /// Send an order to the exchange.
+    fn order(&self, order: Order) -> Self::Future;
 }
