@@ -8,6 +8,8 @@ use futures::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
+    env_logger::init();
+
     let client = binance::Client::new(binance::Params {
         symbol: "btcusdt".to_owned(),
         ws_address: "wss://stream.binance.com:9443".to_owned(),
