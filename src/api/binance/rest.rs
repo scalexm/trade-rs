@@ -1,11 +1,8 @@
 use super::*;
-use std::fmt;
-use openssl::pkey::{PKey, Private};
-use openssl::sign::Signer;
-use openssl::hash::MessageDigest;
+use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
 use hex;
 use hyper::{Method, Request, Body};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fmt, time::{SystemTime, UNIX_EPOCH}};
 use failure::Error;
 
 struct QueryString {

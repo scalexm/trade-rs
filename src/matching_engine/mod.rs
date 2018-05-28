@@ -8,8 +8,6 @@ use std::collections::{BTreeMap, Bound};
 use self::arena::{Index, Arena};
 use std::{mem, fmt};
 use crate::*;
-use notify::*;
-use std::time::Instant;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// Side of an order.
@@ -98,18 +96,16 @@ enum ExecResult {
 }
 
 trait Executor {
-    fn exec<N: Notifier>(
+    fn exec(
         &mut self,
         link: &Link,
-        order: Order,
-        notifier: &mut N
+        order: Order
     ) -> (Option<Index>, Order);
 
-    fn exec_range<'a, I, N: Notifier>(
+    fn exec_range<'a, I>(
         &mut self,
         order: Order,
-        range: I,
-        notifier: &mut N
+        range: I
     ) -> (Price, ExecResult) where I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>;
 
     fn size_at_limit(&self, limit: &PriceLimit) -> Size;
@@ -119,16 +115,12 @@ impl Executor for BookEntries {
     /// Make an order cross through a price limit. Return the updated order (which accounts for
     /// how much the order was filled), as well as an `Index` which points to the first entry
     /// at this price limit which was not exhausted, if any.
-     fn exec<N: Notifier>(
+     fn exec(
         &mut self,
         link: &Link,
         mut order: Order,
-        notifier: &mut N
     ) -> (Option<Index>, Order)
     {
-        let time = Instant::now().elapsed();
-        let time = time.as_secs() * 1000000000 + time.subsec_nanos() as u64;
-
         let mut maybe_index = Some(link.head);
         while let Some(index) = maybe_index {
             {
@@ -143,31 +135,11 @@ impl Executor for BookEntries {
                 };
 
                 if entry.size <= order.size {
-                    notifier.notify(
-                        Notification::Trade(Trade {
-                            size: entry.size,
-                            time,
-                            price: order.price,
-                            buyer_id,
-                            seller_id,
-                        })
-                    );
-
                     // This entry is exhausted by the incoming order.
                     order.size -= entry.size;
                     entry.size = 0;
                     maybe_index = entry.next;
                 } else {
-                    notifier.notify(
-                        Notification::Trade(Trade {
-                            size: order.size,
-                            time,
-                            price: order.price,
-                            buyer_id,
-                            seller_id,
-                        })
-                    );
-
                     // The order has been completely filled.
                     entry.size -= order.size;
                     order.size = 0;
@@ -187,17 +159,16 @@ impl Executor for BookEntries {
     ///   `updated_order` accounting for how much the order was filled
     ///   updated depending on the side of the order.
     /// * `ExecResult::NotExecuted` if the range was empty.
-    fn exec_range<'a, I, N: Notifier>(
+    fn exec_range<'a, I>(
         &mut self,
         mut order: Order,
-        range: I,
-        notifier: &mut N
+        range: I
     ) -> (Price, ExecResult) where I: Iterator<Item = (&'a Price, &'a mut PriceLimit)>
     {
         let mut exec_result = ExecResult::NotExecuted;
         for (price, limit) in range {
             if let Some(ref link) = limit.link {
-                let (maybe_index, new_order) = self.exec(link, order.clone(), notifier);
+                let (maybe_index, new_order) = self.exec(link, order.clone());
                 order = new_order;
                 exec_result = ExecResult::Filled(order.clone());
 
@@ -266,7 +237,7 @@ impl MatchingEngine {
     }
 
     /// Insert an order in the order book, and update best limits consequently.
-    fn insert_order<N: Notifier>(&mut self, order: Order, notifier: &mut N) -> EntryId {
+    fn insert_order(&mut self, order: Order) -> EntryId {
         let id = self.max_entry_id;
         let index = self.entries.alloc(BookEntry {
             size: order.size,
@@ -293,17 +264,6 @@ impl MatchingEngine {
             }));
         }
 
-        notifier.notify(
-            Notification::LimitUpdates(vec![order_book::LimitUpdate {
-                side: match order.side {
-                    Side::Buy => ::Side::Bid,
-                    Side::Sell => ::Side::Ask,
-                },
-                price: order.price,
-                size: self.entries.size_at_limit(price_point)
-            }])
-        );
-
         match order.side {
             Side::Buy if order.price > self.best_bid => {
                 self.best_bid = order.price;
@@ -317,21 +277,21 @@ impl MatchingEngine {
         id
     }
 
-    pub fn limit_with_notifier<N: Notifier>(&mut self, order: Order, notifier: &mut N)
-        -> Option<EntryId>
-    {
+    /// Match or insert a limit order. If the order was inserted in the order book, return the
+    /// corresponding `EntryId`.
+    pub fn limit(&mut self, order: Order) -> Option<EntryId> {
         let (new_price, exec_result) = match order.side {
             Side::Buy if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(self.best_ask), Bound::Included(order.price))
                 );
-                self.entries.exec_range(order.clone(), range, notifier)
+                self.entries.exec_range(order.clone(), range)
             },
             Side::Sell if order.price <= self.best_bid => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(order.price), Bound::Included(self.best_bid))
                 ).rev();
-                self.entries.exec_range(order.clone(), range, notifier)
+                self.entries.exec_range(order.clone(), range)
             },
             _ => (0, ExecResult::NotExecuted)
         };
@@ -340,7 +300,7 @@ impl MatchingEngine {
             // The previous range was empty, i.e. the limit order is not marketable and should
             // be inserted in the order book.
             ExecResult::NotExecuted => {
-                Some(self.insert_order(order, notifier))
+                Some(self.insert_order(order))
             },
             ExecResult::Filled(updated_order) => {
                 // Go find the new best limit.
@@ -369,18 +329,12 @@ impl MatchingEngine {
 
                 // The order has exhausted the whole range, we insert what remains.
                 if updated_order.size > 0 {
-                    Some(self.insert_order(updated_order, notifier))
+                    Some(self.insert_order(updated_order))
                 } else {
                     None
                 }
             }
         }
-    }
-
-    /// Match or insert a limit order. If the order was inserted in the order book, return the
-    /// corresponding `EntryId`.
-    pub fn limit(&mut self, order: Order) -> Option<EntryId> {
-        self.limit_with_notifier(order, &mut TrivialNotifier)
     }
 }
 

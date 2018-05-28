@@ -1,26 +1,16 @@
+use crate::*;
 use api::*;
-use notify::*;
-use std::thread;
-use ws;
-use ws::util::{Timeout, Token};
+use std::{mem, thread};
+use ws::{self, util::{Timeout, Token}};
 use serde_json;
-use futures::sync::mpsc::*;
-use futures::prelude::*;
-use tick::*;
-use std::mem;
-use order_book::LimitUpdate;
+use futures::{prelude::*, sync::mpsc::*};
 use super::{RestError, Params};
 use failure::Error;
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-enum InternalAction {
-    Notify(Notification),
-}
 
 #[derive(Debug)]
 /// `Stream` implementor representing a binance WebSocket stream.
 pub struct BinanceStream {
-    rcv: UnboundedReceiver<InternalAction>,
+    rcv: UnboundedReceiver<Notification>,
 }
 
 impl BinanceStream {
@@ -61,7 +51,7 @@ impl Stream for BinanceStream {
         let action = try_ready!(self.rcv.poll());
         Ok(
             Async::Ready(match action {
-                Some(InternalAction::Notify(notif)) => Some(notif),
+                n @ Some(..) => n,
                 None => None,
             })
         )
@@ -94,7 +84,7 @@ enum BookSnapshotState {
 /// An object handling a WebSocket API connection.
 struct Handler {
     out: ws::Sender,
-    snd: UnboundedSender<InternalAction>,
+    snd: UnboundedSender<Notification>,
     params: Params,
 
     /// We keep a reference to the `EXPIRE` timeout so that we can cancel it when we receive
@@ -104,7 +94,7 @@ struct Handler {
     book_snapshot_state: BookSnapshotState,
 
     /// We keep track of the last `u` indicator sent by binance, this is used for checking
-    /// the coherency of the ordering of the events by binance.
+    /// the coherency of the ordering of the events sent by binance.
     previous_u: Option<u64>,
 }
 
@@ -156,12 +146,13 @@ struct BinanceBookSnapshot {
 }
 
 impl Handler {
-    fn send(&mut self, action: InternalAction) {
-        if let Err(..) = self.snd.unbounded_send(action) {
+    fn send(&mut self, notif: Notification) -> ws::Result<()> {
+        if let Err(..) = self.snd.unbounded_send(notif) {
             // The corresponding receiver was dropped, this connection does not make sense
             // anymore.
-            self.out.shutdown().expect("shutdown error");
+            self.out.shutdown()?;
         }
+        Ok(())
     }
 
     /// Utility function for converting a `BinanceLimitUpdate` into a `LimitUpdate` (with
@@ -243,7 +234,7 @@ impl Handler {
         );
 
         for notif in notifs {
-            self.send(InternalAction::Notify(notif));
+            self.send(notif);
         }
 
         self.book_snapshot_state = BookSnapshotState::Ok;
@@ -287,7 +278,7 @@ impl ws::Handler for Handler {
                                     error!("LOB processing encountered error: {}", err);
                                     
                                     // We cannot continue without the book, we shutdown.
-                                    self.out.shutdown().expect("shutdown error");
+                                    self.out.shutdown()?;
                                 }
                             },
 
@@ -304,7 +295,7 @@ impl ws::Handler for Handler {
                             // the book hence we cannot continue.
                             Async::Ready(None) => {
                                 error!("LOB sender has disconnected");
-                                self.out.shutdown().expect("shutdown error");
+                                self.out.shutdown()?;
                                 return Ok(());
                             }
                         }
@@ -336,7 +327,7 @@ impl ws::Handler for Handler {
             match self.parse_message(json) {
                 // Trade notif: just forward to the consumer.
                 Ok(Some(notif @ Notification::Trade(..))) => {
-                    self.send(InternalAction::Notify(notif))
+                    self.send(notif)?;
                 },
 
                 // Depth update notif: behavior depends on the status of the order book snapshot.
@@ -408,7 +399,7 @@ impl ws::Handler for Handler {
                     // We already received the book snapshot and notified the final consumer,
                     // we can now notify further notifications to them.
                     BookSnapshotState::Ok => {
-                        self.send(InternalAction::Notify(Notification::LimitUpdates(updates)))
+                        self.send(Notification::LimitUpdates(updates))?;
                     },
                 },
 

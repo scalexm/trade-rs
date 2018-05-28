@@ -1,7 +1,6 @@
 use crate::*;
 use std::fmt;
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
+use std::collections::btree_map::{BTreeMap, Entry};
 use std::cell::Cell;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -46,7 +45,7 @@ impl OrderBook {
         };
     }
 
-    /// Retrieve the size of the given limit.
+    /// Retrieve the size at the given limit.
     /// N.B.: `&mut self` because limits are initialized lazily.
     pub fn size_at_limit(&mut self, side: Side, price: Price) -> Size {
         let entry = match side {

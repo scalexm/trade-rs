@@ -1,7 +1,6 @@
 pub mod binance;
 
 use crate::*;
-use notify::Notification;
 use futures::prelude::*;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -43,6 +42,16 @@ pub struct OrderAck {
 
     /// Time at which the order was treated.
     time: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+/// A notification that some event happened.
+pub enum Notification {
+    /// A trade was executed.
+    Trade(Trade),
+
+    /// The limit order book has changed and should be updated.
+    LimitUpdates(Vec<LimitUpdate>),
 }
 
 /// A trait implemented by clients of various exchanges API.

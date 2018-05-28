@@ -5,7 +5,6 @@ use api::*;
 use tick::Tick;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
-use std::error::Error;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Params needed for a binance API client.

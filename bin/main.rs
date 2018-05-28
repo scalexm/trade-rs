@@ -3,7 +3,6 @@ extern crate futures;
 extern crate env_logger;
 
 use trade_rs::api::*;
-use trade_rs::notify::Notification;
 use trade_rs::Tick;
 use futures::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};

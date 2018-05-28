@@ -9,7 +9,7 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
-#[macro_use] extern crate hyper;
+extern crate hyper;
 extern crate hyper_tls;
 #[macro_use] extern crate log;
 extern crate num;
@@ -17,13 +17,12 @@ extern crate openssl;
 extern crate hex;
 
 pub mod matching_engine;
-pub mod notify;
 pub mod api;
 pub mod order_book;
 pub mod tick;
 
-pub use tick::Tick;
-pub use order_book::OrderBook;
+pub use tick::*;
+pub use order_book::*;
 
 /// A price, in ticks.
 pub type Price = u64;
