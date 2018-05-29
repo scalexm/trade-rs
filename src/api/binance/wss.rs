@@ -173,7 +173,7 @@ impl Handler {
 
     /// Utility function for converting a `BinanceLimitUpdate` into a `LimitUpdate` (with
     /// conversion in ticks and so on).
-    fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side)
+    fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side, timestamp: u64)
         -> Result<LimitUpdate, ConversionError>
     {
         Ok(
@@ -181,6 +181,7 @@ impl Handler {
                 side,
                 price: self.params.price_tick.convert_unticked(&l.price)?,
                 size: self.params.size_tick.convert_unticked(&l.size)?,
+                timestamp,
             }
         )
     }
@@ -209,6 +210,7 @@ impl Handler {
 
             "depthUpdate" => {
                 let depth_update: BinanceDepthUpdate = serde_json::from_value(json)?;
+                let time = depth_update.E;
 
                 // The order is consistent if the previous `u + 1` is equal to current `U`.
                 if let Some(previous_u) = self.previous_u {
@@ -221,10 +223,10 @@ impl Handler {
 
                 let bid = depth_update.b
                                       .iter()
-                                      .map(|l| self.convert_binance_update(l, Side::Bid));
+                                      .map(|l| self.convert_binance_update(l, Side::Bid, time));
                 let ask = depth_update.a
                                       .iter()
-                                      .map(|l| self.convert_binance_update(l, Side::Ask));
+                                      .map(|l| self.convert_binance_update(l, Side::Ask, time));
 
                 Some(
                     Notification::LimitUpdates(
@@ -270,8 +272,13 @@ impl Handler {
     ) -> Result<Vec<Notification>, Error>
     {
         let snapshot = snapshot?;
-        let bid = snapshot.bids.iter().map(|l| self.convert_binance_update(l, Side::Bid));
-        let ask = snapshot.asks.iter().map(|l| self.convert_binance_update(l, Side::Ask));
+        let time = timestamp_ms();
+        let bid = snapshot.bids
+                          .iter()
+                          .map(|l| self.convert_binance_update(l, Side::Bid, time));
+        let ask = snapshot.asks
+                          .iter()
+                          .map(|l| self.convert_binance_update(l, Side::Ask, time));
 
         let notifs = Some(
             Notification::LimitUpdates(
@@ -425,7 +432,13 @@ impl ws::Handler for Handler {
                                 })
                             }).map_err(From::from).and_then(move |(status, body)| {
                                 if status != hyper::StatusCode::OK {
-                                    Err(RestError::from_status_code(status))?;
+                                    let binance_error = serde_json::from_slice(&body);
+                                    Err(
+                                        RestError::from_binance_error(
+                                            status,
+                                            binance_error.ok()
+                                        )
+                                    )?;
                                 }
 
                                 Ok(serde_json::from_slice(&body)?)

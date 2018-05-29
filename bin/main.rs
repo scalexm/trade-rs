@@ -5,7 +5,6 @@ extern crate env_logger;
 use trade_rs::api::*;
 use trade_rs::Tick;
 use futures::prelude::*;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
     env_logger::init();
@@ -32,11 +31,10 @@ fn main() {
                 );
             }
             Notification::LimitUpdates(updates) => {
-                let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 for update in updates {
                     println!(
                         "update,{},{:?},{},{}",
-                        time.as_secs() + time.subsec_millis() as u64,
+                        update.timestamp,
                         update.side,
                         Tick::new(100).convert_ticked(update.price).unwrap(),
                         Tick::new(1000000).convert_ticked(update.size).unwrap()

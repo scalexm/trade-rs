@@ -2,7 +2,7 @@ use super::*;
 use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
 use hex;
 use hyper::{Method, Request, Body};
-use std::{fmt, time::{SystemTime, UNIX_EPOCH}};
+use std::fmt;
 
 struct QueryString {
     query: String,
@@ -97,12 +97,9 @@ enum Signature {
 }
 
 impl Client {
-    fn request(&self, endpoint: &str, method: Method, mut query: QueryString, sig: Signature)
+    fn request(&self, endpoint: &str, method: Method, query: QueryString, sig: Signature)
         -> Box<Future<Item = hyper::Chunk, Error = Error>>
     {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        query.push("timestamp", timestamp.as_secs() + timestamp.subsec_millis() as u64);
-
         let query = match sig {
             Signature::No => query.into_string(),
             Signature::Yes => query.into_string_with_signature(&self.secret_key),
@@ -144,7 +141,8 @@ impl Client {
             })
         }).map_err(From::from).and_then(|(status, body)| {
             if status != hyper::StatusCode::OK {
-                Err(RestError::from_status_code(status))?;
+                let binance_error = serde_json::from_slice(&body);
+                Err(RestError::from_binance_error(status, binance_error.ok()))?;
             }
             Ok(body)
         });
@@ -165,6 +163,7 @@ impl Client {
             query.push("newClientOrderId", order_id);
         }
         query.push("recvWindow", order.time_window);
+        query.push("timestamp", timestamp_ms());
 
         let fut = self.request("api/v3/order", Method::POST, query, Signature::Yes)
             .and_then(|body|
@@ -188,6 +187,7 @@ impl Client {
             query.push("newClientOrderId", cancel_id);
         }
         query.push("recvWindow", cancel.time_window);
+        query.push("timestamp", timestamp_ms());
 
         let fut = self.request("api/v3/order", Method::DELETE, query, Signature::Yes)
             .and_then(|body|
@@ -208,7 +208,7 @@ impl Client {
             .and_then(|body|
         {
             let body: serde_json::Value = serde_json::from_slice(&body)?;
-            match body["listen_key"].as_str() {
+            match body["listenKey"].as_str() {
                 Some(key) => Ok(key.to_string()),
                 None => bail!("status code 200 but no listen key was found"),
             }
@@ -231,6 +231,7 @@ impl Client {
     {
         let mut query = QueryString::new();
         query.push("recvWindow", time_window);
+        query.push("timestamp", timestamp_ms());
 
         let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
             .and_then(|body|

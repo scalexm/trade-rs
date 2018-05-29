@@ -51,8 +51,53 @@ pub struct Client {
     listen_key: Option<String>,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct BinanceRestError {
+    code: i32,
+    msg: String,
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
-pub enum RestError {
+/// An error returned by binance REST API.
+pub struct RestError {
+    /// Error category.
+    pub category: RestErrorCategory,
+
+    /// Internal binance error code: see API documentation.
+    pub error_code: Option<i32>,
+
+    /// Description of the error.
+    pub error_msg: Option<String>,
+}
+
+impl RestError {
+    fn from_binance_error(status: StatusCode, binance_error: Option<BinanceRestError>)
+        -> Self
+    {
+        RestError {
+            category: RestErrorCategory::from_status_code(status),
+            error_code: binance_error.as_ref().map(|error| error.code),
+            error_msg: binance_error.map(|error| error.msg),
+        }
+    }
+}
+
+impl std::fmt::Display for RestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.category)?;
+        if let Some(error_msg) = &self.error_msg {
+            write!(f, r#": "{}""#, error_msg)?;
+        }
+        if let Some(error_code) = self.error_code {
+            write!(f, " (error_code = {})", error_code)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Fail)]
+/// Translate an HTTP error code to a binance error category.
+pub enum RestErrorCategory {
     #[fail(display = "malformed request")]
     /// Malformed request, issue on the lib side.
     MalformedRequest,
@@ -75,20 +120,14 @@ pub enum RestError {
     /// Issue on binance side.
     BinanceInternalError,
 
-    #[fail(display = "error {}: {}", code, msg)]
-    /// Custom error message in the response body.
-    Custom {
-        code: i32,
-        msg: String,
-    },
-
     #[fail(display = "unknown error")]
     /// Unkown error.
     Unknown,
 }
 
-impl RestError {
-    crate fn from_status_code(code: StatusCode) -> Self {
+impl RestErrorCategory {
+    fn from_status_code(code: StatusCode) -> Self {
+        use self::RestErrorCategory::*;
         match code {
             StatusCode::OK => panic!("`RestError::from_status_code` with `StatusCode::Ok`"),
 
@@ -118,13 +157,13 @@ impl RestError {
             StatusCode::UPGRADE_REQUIRED |
             StatusCode::PRECONDITION_REQUIRED |
             StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE |
-            StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS => RestError::MalformedRequest,
+            StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS => MalformedRequest,
 
             // 418
-            StatusCode::IM_A_TEAPOT => RestError::AddressBanned,
+            StatusCode::IM_A_TEAPOT => AddressBanned,
 
             // 429
-            StatusCode::TOO_MANY_REQUESTS => RestError::BrokeRateLimit,
+            StatusCode::TOO_MANY_REQUESTS => BrokeRateLimit,
 
             // 5XX
             StatusCode::INTERNAL_SERVER_ERROR |
@@ -136,12 +175,12 @@ impl RestError {
             StatusCode::INSUFFICIENT_STORAGE |
             StatusCode::LOOP_DETECTED |
             StatusCode::NOT_EXTENDED |
-            StatusCode::NETWORK_AUTHENTICATION_REQUIRED => RestError::BinanceInternalError,
+            StatusCode::NETWORK_AUTHENTICATION_REQUIRED => BinanceInternalError,
 
             // 504
-            StatusCode::GATEWAY_TIMEOUT => RestError::Timeout,
+            StatusCode::GATEWAY_TIMEOUT => Timeout,
 
-            _ => RestError::Unknown,
+            _ => Unknown,
         }
     }
 }
@@ -159,8 +198,10 @@ impl Client {
         };
 
         use tokio::runtime::current_thread;
+        info!("Requesting listen key");
         let key = current_thread::Runtime::new().unwrap()
                                                 .block_on(client.get_listen_key())?;
+        info!("Received listen key");
 
         client.listen_key = Some(key);
         Ok(client)

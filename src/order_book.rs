@@ -21,6 +21,9 @@ pub struct LimitUpdate {
 
     /// Updated size.
     pub size: Size,
+
+    /// Timestamp at which the update happened, in ms.
+    pub timestamp: u64,
 }
 
 impl OrderBook {

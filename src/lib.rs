@@ -63,3 +63,10 @@ pub struct Trade {
     /// ID of the seller.
     pub seller_id: TraderId,
 }
+
+pub fn timestamp_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)
+                                     .expect("time went backward");
+    timestamp.as_secs() * 1000 + timestamp.subsec_millis() as u64
+}
