@@ -310,6 +310,10 @@ impl ws::Handler for Handler {
         self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)
     }
 
+    fn on_shutdown(&mut self) {
+        info!("Client shutting down");
+    }
+
     fn on_timeout(&mut self, event: Token) -> ws::Result<()> {
         match event {
             PING => {
