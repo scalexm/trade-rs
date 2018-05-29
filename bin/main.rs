@@ -16,6 +16,7 @@ fn main() {
         http_address: "https://www.binance.com".to_owned(),
         price_tick: Tick::new(100),
         size_tick: Tick::new(1000000),
+        commission_tick: Tick::new(100000000),
         api_key: String::new(),
         secret_key: String::new(),
     }).unwrap();
@@ -42,6 +43,7 @@ fn main() {
                     );
                 }
             },
+            _ => (),
         };
         Ok(())
     });

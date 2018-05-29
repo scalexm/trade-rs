@@ -24,6 +24,9 @@ pub struct Params {
     /// Tick unit for sizes.
     pub size_tick: Tick,
 
+    /// Tick unit for commissions.
+    pub commission_tick: Tick,
+
     /// Binance API Key.
     pub api_key: String,
 
@@ -32,6 +35,16 @@ pub struct Params {
 }
 
 /// A binance API client.
+/// 
+/// The notification stream accessed through `<Client as ApiClient>::stream` is only valid for
+/// 24 hours and will automatically stop after the 24 hours mark. Just call `stream` again to
+/// get a new one.
+/// 
+/// The listen key is only valid for 60 minutes after its creation (through `Client::new`).
+/// Each `<Client as ApiClient>::ping` request will extend its validity for 60 minutes. Binance
+/// recommends to send a ping every 30 minutes.
+/// If the listen key becomes invalid, this client will stop forwarding the user data stream.
+/// The only way to fix it will be to drop the client and create a new one.
 pub struct Client {
     params: Params,
     secret_key: PKey<Private>,

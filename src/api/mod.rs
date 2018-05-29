@@ -52,17 +52,41 @@ pub struct Cancel {
 /// An acknowledgment that an order has been treated by the server.
 pub struct OrderAck {
     /// ID identifiying the order.
-    order_id: String,
+    pub order_id: String,
 
     /// Time at which the order was treated.
-    time: u64,
+    pub timestamp: u64,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An acknowledgment that a cancel order has been treated by the server.
 pub struct CancelAck {
     /// ID identifying the cancel order.
-    cancel_id: String,
+    pub cancel_id: String,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// A notification that some order has been updated, i.e. a trade crossed through this order.
+pub struct OrderUpdate {
+    /// ID identifying the order being updated.
+    pub order_id: String,
+
+    /// Size just consumed by last trade.
+    pub consumed_size: Size,
+
+    /// Total remaining size for this order (can be maintained in a standalone way
+    /// using `consumed_size` and `commission`).
+    pub total_size: Size,
+
+    /// Price at which the last trade happened.
+    pub consumed_price: Price,
+
+    /// Commission amount (warning: for binance this may not be in the same currency as
+    /// the traded asset).
+    pub commission: Size,
+
+    /// Time at which the update happened.
+    pub timestamp: u64,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -73,6 +97,12 @@ pub enum Notification {
 
     /// The limit order book has changed and should be updated.
     LimitUpdates(Vec<LimitUpdate>),
+
+    /// An order has been updated.
+    OrderUpdate(OrderUpdate),
+
+    /// An order has expired.
+    OrderExpired(String),
 }
 
 /// A trait implemented by clients of various exchanges API.

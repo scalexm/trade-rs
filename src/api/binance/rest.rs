@@ -158,7 +158,7 @@ impl Client {
             let ack: BinanceOrderAck = serde_json::from_slice(&body)?;
             Ok(OrderAck {
                 order_id: ack.clientOrderId,
-                time: ack.transactTime,
+                timestamp: ack.transactTime,
             })
         });
         Box::new(fut)
@@ -207,7 +207,7 @@ impl Client {
         query.push("listenKey", self.listen_key.as_ref().expect("no listen key"));
 
         let fut = self.request("api/v1/userDataStream", Method::PUT, query, Signature::No)
-            .and_then(|_| { Ok(()) });
+            .and_then(|_| Ok(()));
         Box::new(fut)
     }
 }

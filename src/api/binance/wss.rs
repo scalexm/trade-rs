@@ -127,6 +127,40 @@ struct BinanceBookSnapshot {
     asks: Vec<BinanceLimitUpdate>,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[allow(non_snake_case)]
+/// A JSON representation of an order update, sent by binance.
+struct BinanceExecutionReport {
+    e: String,
+    E: u64,
+    s: String,
+    c: String,
+    S: String,
+    o: String,
+    f: String,
+    q: String,
+    p: String,
+    P: String,
+    F: String,
+    g: i64,
+    C: String,
+    x: String,
+    X: String,
+    r: String,
+    i: u64,
+    l: String,
+    z: String,
+    L: String,
+    n: String,
+    N: String,
+    T: u64,
+    t: i64,
+    I: u64,
+    w: bool,
+    m: bool,
+    M: bool
+}
+
 impl Handler {
     fn send(&mut self, notif: Notification) -> ws::Result<()> {
         if let Err(..) = self.snd.unbounded_send(notif) {
@@ -198,6 +232,31 @@ impl Handler {
                     )
                 )
             },
+
+            "executionReport" => {
+                let report: BinanceExecutionReport = serde_json::from_value(json)?;
+
+                match report.X.as_ref() {
+                    "TRADE" => Some(
+                        Notification::OrderUpdate(OrderUpdate {
+                            order_id: report.c,
+                            consumed_size: self.params.size_tick.convert_unticked(&report.l)?,
+                            total_size: self.params.size_tick.convert_unticked(&report.q)?,
+                            consumed_price: self.params.price_tick.convert_unticked(&report.L)?,
+                            commission: self.params.commission_tick.convert_unticked(&report.n)?,
+                            timestamp: report.T,
+                        })
+                    ),
+
+                    "EXPIRED" => Some(
+                        Notification::OrderExpired(report.c)
+                    ),
+
+                    // "NEW", "CANCELED" and "REJECTED" should already be handled by the
+                    // REST API.
+                    _ => None,
+                }
+            }
 
             _ => None,
         };
@@ -324,11 +383,6 @@ impl ws::Handler for Handler {
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(json) = msg {
             match self.process_message(json) {
-                // Trade notif: just forward to the consumer.
-                Ok(Some(notif @ Notification::Trade(..))) => {
-                    self.send(notif)?;
-                },
-
                 // Depth update notif: behavior depends on the status of the order book snapshot.
                 Ok(Some(Notification::LimitUpdates(updates))) => match self.book_snapshot_state {
                     // Very first limit update event received: time to ask for the book snapshot.
@@ -403,6 +457,12 @@ impl ws::Handler for Handler {
                     BookSnapshotState::Ok => {
                         self.send(Notification::LimitUpdates(updates))?;
                     },
+                },
+
+
+                // Other notif: just forward to the consumer.
+                Ok(Some(notif)) => {
+                    self.send(notif)?;
                 },
 
                 // Seems like the message was not conforming.
