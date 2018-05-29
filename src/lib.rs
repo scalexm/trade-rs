@@ -3,13 +3,14 @@
 #![feature(nll)]
 
 extern crate ws;
-#[macro_use] extern crate futures;
+extern crate futures;
 extern crate serde_json;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
 extern crate hyper;
 extern crate hyper_tls;
+extern crate tokio;
 #[macro_use] extern crate log;
 extern crate num;
 extern crate openssl;

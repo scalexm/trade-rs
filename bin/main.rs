@@ -18,7 +18,7 @@ fn main() {
         size_tick: Tick::new(1000000),
         api_key: String::new(),
         secret_key: String::new(),
-    });
+    }).unwrap();
 
     let fut = client.stream().for_each(|notif| {
         match notif {

@@ -40,6 +40,9 @@ pub struct Cancel {
     /// Identify the order to be canceled.
     pub order_id: String,
 
+    /// Delay until the cancel order is canceled if not treated by the server.
+    pub time_window: u64,
+
     /// Unique id used to identify this cancel order, stringified.
     /// Automatically generated if `None`.
     pub cancel_id: Option<String>,
@@ -80,11 +83,25 @@ pub trait ApiClient {
 
     /// Type returned by the `order` implementor, used for awaiting the execution of
     /// an order.
-    type Future: Future<Item = OrderAck, Error = Error>;
+    type FutureOrder: Future<Item = OrderAck, Error = Error>;
+
+    /// Type returned by the `cancel` implementor, used for awaiting the execution of
+    /// a cancel order.
+    type FutureCancel: Future<Item = CancelAck, Error = Error>;
+
+    /// Type returned by the `ping` implementor, used for awaiting the execution of
+    /// a ping.
+    type FuturePing: Future<Item = (), Error = Error>;
 
     /// Start streaming notifications.
     fn stream(&self) -> Self::Stream;
 
     /// Send an order to the exchange.
-    fn order(&self, order: Order) -> Self::Future;
+    fn order(&self, order: Order) -> Self::FutureOrder;
+
+    /// Send a cancel order to the exchange.
+    fn cancel(&self, cancel: Cancel) -> Self::FutureCancel;
+
+    /// Send a ping to the exchange.
+    fn ping(&self) -> Self::FuturePing;
 }

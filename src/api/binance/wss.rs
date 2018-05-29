@@ -7,22 +7,19 @@ use std::{mem, thread};
 use ws::{self, util::{Timeout, Token}};
 use serde_json;
 use futures::{prelude::*, sync::mpsc::*};
-use super::{RestError, Params};
+use super::{Client, RestError, Params};
 
-#[derive(Debug)]
-/// `Stream` implementor representing a binance WebSocket stream.
-pub struct BinanceStream {
-    rcv: UnboundedReceiver<Notification>,
-}
-
-impl BinanceStream {
-    crate fn new(params: Params) -> Self {
+impl Client {
+    crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
+        let params = self.params.clone();
+        let listen_key = self.listen_key.as_ref().expect("no listen key").clone();
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
             let address = format!(
-               "{0}/ws/{1}@trade/{1}@depth",
+               "{0}/ws/{1}@trade/{1}@depth/{2}",
                 params.ws_address,
-                params.symbol.to_lowercase()
+                params.symbol.to_lowercase(),
+                listen_key
             );
             info!("Initiating WebSocket connection at {}", address);
             
@@ -39,24 +36,7 @@ impl BinanceStream {
             }   
         });
         
-        BinanceStream {
-            rcv,
-        }
-    }
-}
-
-impl Stream for BinanceStream {
-    type Item = Notification;
-    type Error = ();
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let action = try_ready!(self.rcv.poll());
-        Ok(
-            Async::Ready(match action {
-                n @ Some(..) => n,
-                None => None,
-            })
-        )
+        rcv
     }
 }
 
@@ -171,51 +151,61 @@ impl Handler {
         )
     }
 
-    /// Parse a (should-be) JSON message sent by binance.
-    fn parse_message(&mut self, json: String) -> Result<Option<Notification>, Error> {
-        let v: serde_json::Value = serde_json::from_str(&json)?;
-        let event = v["e"].to_string();
-
-        let notif = if event == r#""trade""# {
-            let trade: BinanceTrade = serde_json::from_value(v)?;
-            Some(
-                Notification::Trade(Trade {
-                    size: self.params.size_tick.convert_unticked(&trade.q)?,
-                    time: trade.T,
-                    price: self.params.price_tick.convert_unticked(&trade.p)?,
-                    buyer_id: trade.b,
-                    seller_id: trade.a,
-                })
-            )
-        } else if event == r#""depthUpdate""# {
-            let depth_update: BinanceDepthUpdate = serde_json::from_value(v)?;
-
-            // The order is consistent if the previous `u + 1` is equal to current `U`.
-            if let Some(previous_u) = self.previous_u {
-                if previous_u + 1 != depth_update.U {
-                    // FIXME: Maybe we should just shutdown here?
-                    bail!("previous `u + 1` and current `U` do not match");
-                }
-            }
-            self.previous_u = Some(depth_update.u);
-
-            let bid = depth_update.b.iter().map(|l| self.convert_binance_update(l, Side::Bid));
-            let ask = depth_update.a.iter().map(|l| self.convert_binance_update(l, Side::Ask));
-
-            Some(
-                Notification::LimitUpdates(
-                    bid.chain(ask).collect::<Result<Vec<_>, ConversionError>>()?
-                )
-            )
-        } else {
-            None
+    /// Process a (should-be) JSON message sent by binance.
+    fn process_message(&mut self, json: String) -> Result<Option<Notification>, Error> {
+        let json: serde_json::Value = serde_json::from_str(&json)?;
+        let event = match json["e"].as_str() {
+            Some(event) => event.to_string(),
+            None => return Ok(None),
         };
 
+        let notif = match event.as_ref() {
+            "trade" => {
+                let trade: BinanceTrade = serde_json::from_value(json)?;
+                Some(
+                    Notification::Trade(Trade {
+                        size: self.params.size_tick.convert_unticked(&trade.q)?,
+                        time: trade.T,
+                        price: self.params.price_tick.convert_unticked(&trade.p)?,
+                        buyer_id: trade.b,
+                        seller_id: trade.a,
+                    })
+                )
+            },
+
+            "depthUpdate" => {
+                let depth_update: BinanceDepthUpdate = serde_json::from_value(json)?;
+
+                // The order is consistent if the previous `u + 1` is equal to current `U`.
+                if let Some(previous_u) = self.previous_u {
+                    if previous_u + 1 != depth_update.U {
+                        // FIXME: Maybe we should just shutdown here?
+                        bail!("previous `u + 1` and current `U` do not match");
+                    }
+                }
+                self.previous_u = Some(depth_update.u);
+
+                let bid = depth_update.b
+                                      .iter()
+                                      .map(|l| self.convert_binance_update(l, Side::Bid));
+                let ask = depth_update.a
+                                      .iter()
+                                      .map(|l| self.convert_binance_update(l, Side::Ask));
+
+                Some(
+                    Notification::LimitUpdates(
+                        bid.chain(ask).collect::<Result<Vec<_>, ConversionError>>()?
+                    )
+                )
+            },
+
+            _ => None,
+        };
         Ok(notif)
     }
 
     fn process_book_snapshot(
-        &mut self,
+        &self,
         snapshot: Result<BinanceBookSnapshot, Error>,
         passed_events: Vec<LimitUpdates>
     ) -> Result<Vec<Notification>, Error>
@@ -265,7 +255,9 @@ impl ws::Handler for Handler {
                 match mem::replace(&mut self.book_snapshot_state, BookSnapshotState::None) {
                     // The timout is enabled only when the we are in the `Waiting` state.
                     BookSnapshotState::None |
-                    BookSnapshotState::Ok => panic!("book snapshot timeout not supposed to happen"),
+                    BookSnapshotState::Ok => panic!(
+                        "book snapshot timeout not supposed to happen"
+                    ),
 
                     BookSnapshotState::Waiting(mut rcv, events) => {
                         match rcv.poll().unwrap() {
@@ -279,7 +271,10 @@ impl ws::Handler for Handler {
                                         self.book_snapshot_state = BookSnapshotState::Ok;
                                     },
                                     Err(err) => {
-                                        error!(r#"LOB processing encountered error: "{}""#, err);
+                                        error!(
+                                            r#"LOB processing encountered error: "{}""#,
+                                            err
+                                        );
                                     
                                         // We cannot continue without the book, we shutdown.
                                         self.out.shutdown()?;
@@ -328,7 +323,7 @@ impl ws::Handler for Handler {
 
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(json) = msg {
-            match self.parse_message(json) {
+            match self.process_message(json) {
                 // Trade notif: just forward to the consumer.
                 Ok(Some(notif @ Notification::Trade(..))) => {
                     self.send(notif)?;
@@ -385,7 +380,10 @@ impl ws::Handler for Handler {
                                 Ok(())
                             });
 
-                            hyper::rt::run(fut);
+                            use tokio::runtime::current_thread;
+                            let mut runtime = current_thread::Runtime::new().unwrap();
+                            runtime.spawn(fut);
+                            runtime.run().unwrap();
                         });
 
                         // We are in `Waiting` state: enable the timeout.

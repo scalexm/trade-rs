@@ -35,6 +35,7 @@ pub struct Params {
 pub struct Client {
     params: Params,
     secret_key: PKey<Private>,
+    listen_key: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
@@ -133,28 +134,45 @@ impl RestError {
 }
 
 impl Client {
-    /// Create a new API client with given `params`.
-    pub fn new(params: Params) -> Self {
-        let secret_key = match PKey::hmac(params.secret_key.as_bytes()) {
-            Ok(secret_key) => secret_key,
-            Err(err) => panic!("error while parsing HMAC: {}", err),
-        };
-        Client {
+    /// Create a new binance API client with given `params` and request a listen key
+    /// for the user data stream. The request will block the thread.
+    pub fn new(params: Params) -> Result<Self, Error> {
+        let secret_key = PKey::hmac(params.secret_key.as_bytes())?;
+
+        let mut client = Client {
             secret_key,
             params,
-        }
+            listen_key: None,
+        };
+
+        use tokio::runtime::current_thread;
+        let key = current_thread::Runtime::new().unwrap()
+                                                .block_on(client.get_listen_key())?;
+
+        client.listen_key = Some(key);
+        Ok(client)
     }
 }
 
 impl ApiClient for Client {
-    type Stream = wss::BinanceStream;
-    type Future = Box<Future<Item = OrderAck, Error = Error>>;
+    type Stream = futures::sync::mpsc::UnboundedReceiver<Notification>;
+    type FutureOrder = Box<Future<Item = OrderAck, Error = Error>>;
+    type FutureCancel = Box<Future<Item = CancelAck, Error = Error>>;
+    type FuturePing = Box<Future<Item = (), Error = Error>>;
 
     fn stream(&self) -> Self::Stream {
-        wss::BinanceStream::new(self.params.clone())
+        self.new_stream()
     }
 
-    fn order(&self, order: Order) -> Self::Future {
+    fn order(&self, order: Order) -> Self::FutureOrder {
         self.order_impl(order)
+    }
+
+    fn cancel(&self, cancel: Cancel) -> Self::FutureCancel {
+        self.cancel_impl(cancel)
+    }
+
+    fn ping(&self) -> Self::FuturePing {
+        self.ping_impl()
     }
 }

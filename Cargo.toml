@@ -17,6 +17,7 @@ env_logger = "^0.5"
 num = "^0.1"
 openssl = "^0.10"
 hex = "^0.3"
+tokio = "^0.1"
 
 [dependencies.ws]
 version = "^0.7"
