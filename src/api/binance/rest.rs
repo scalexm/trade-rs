@@ -76,6 +76,20 @@ struct BinanceCancelAck {
     clientOrderId: String,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct BinanceAccountInformation {
+    makerCommission: u64,
+    takerCommission: u64,
+    buyerCommission: u64,
+    sellerCommission: u64,
+    canTrade: bool,
+    canWithdraw: bool,
+    canDeposit: bool,
+    updateTime: u64,
+    balances: Vec<Balance>,
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 enum Signature {
     No,
@@ -208,6 +222,32 @@ impl Client {
 
         let fut = self.request("api/v1/userDataStream", Method::PUT, query, Signature::No)
             .and_then(|_| Ok(()));
+        Box::new(fut)
+    }
+
+    /// Retrieve account information for this client.
+    pub fn account_information(&self, time_window: u64)
+        -> Box<Future<Item = AccountInformation, Error = Error>>
+    {
+        let mut query = QueryString::new();
+        query.push("recvWindow", time_window);
+
+        let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
+            .and_then(|body|
+        {
+            let info: BinanceAccountInformation = serde_json::from_slice(&body)?;
+            Ok(AccountInformation {
+                maker_commission: info.makerCommission,
+                taker_commission: info.takerCommission,
+                buyer_commission: info.buyerCommission,
+                seller_commission: info.sellerCommission,
+                can_trade: info.canTrade,
+                can_withdraw: info.canWithdraw,
+                can_deposit: info.canDeposit,
+                update_timestamp: info.updateTime,
+                balances: info.balances,
+            })
+        });
         Box::new(fut)
     }
 }

@@ -26,7 +26,7 @@ pub struct Order {
     /// Time in force, see https://www.investopedia.com/terms/t/timeinforce.asp.
     pub time_in_force: TimeInForce,
 
-    /// Delay until the order is canceled if not treated by the server.
+    /// Delay until the order becomes invalid if not treated by the server, in ms.
     pub time_window: u64,
 
     /// Unique id used to identify this order, stringified.
@@ -40,7 +40,7 @@ pub struct Cancel {
     /// Identify the order to be canceled.
     pub order_id: String,
 
-    /// Delay until the cancel order is canceled if not treated by the server.
+    /// Delay until the cancel order becomes invalid if not treated by the server, in ms.
     pub time_window: u64,
 
     /// Unique id used to identify this cancel order, stringified.
@@ -54,7 +54,7 @@ pub struct OrderAck {
     /// ID identifiying the order.
     pub order_id: String,
 
-    /// Time at which the order was treated.
+    /// Timestamp at which the order was treated, in ms.
     pub timestamp: u64,
 }
 
@@ -85,7 +85,7 @@ pub struct OrderUpdate {
     /// the traded asset).
     pub commission: Size,
 
-    /// Time at which the update happened.
+    /// Timestamp at which the update happened, in ms.
     pub timestamp: u64,
 }
 

@@ -51,7 +51,7 @@ pub struct Trade {
     /// Size consumed by the trade.
     pub size: Size,
 
-    // Trade timestamp.
+    // Trade timestamp, in ms.
     pub time: u64,
 
     /// Price in ticks.
