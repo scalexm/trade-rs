@@ -32,11 +32,11 @@ pub type Price = u64;
 /// Size of an order / trade, in ticks.
 pub type Size = u64;
 
-/// An identifier which should uniquely determine a trader.
-pub type TraderId = usize;
+/// An identifier which should uniquely determine an order.
+pub type OrderId = usize;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// Side of a trade (bid or ask).
+/// Side of an order (bid or ask).
 pub enum Side {
     /// Bid side.
     Bid,
@@ -46,7 +46,7 @@ pub enum Side {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// A liquidity consuming trade.
+/// A liquidity consuming order.
 pub struct Trade {
     /// Size consumed by the trade.
     pub size: Size,
@@ -57,11 +57,16 @@ pub struct Trade {
     /// Price in ticks.
     pub price: Price,
 
-    /// ID of the buyer.
-    pub buyer_id: TraderId,
+    pub consumer_order_id: OrderId,
 
-    /// ID of the seller.
-    pub seller_id: TraderId,
+    pub maker_order_id: OrderId,
+
+    /// Side of the maker:
+    /// * if `Ask`, then the maker was providing liquidity on the ask side,
+    ///   i.e. the consumer bought to the maker
+    /// * if `Bid`, then the maker was providing liquidity on the bid side,
+    ///   i.e. the consumer sold to the maker
+    pub maker_side: Side,
 }
 
 pub fn timestamp_ms() -> u64 {

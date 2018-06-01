@@ -9,16 +9,6 @@ use self::arena::{Index, Arena};
 use std::{mem, fmt};
 use crate::*;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-/// Side of an order.
-pub enum Side {
-    /// Buy side (would be inserted at bid).
-    Buy,
-
-    /// Sell side (would be inserted at ask).
-    Sell,
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An order.
 pub struct Order {
@@ -28,15 +18,9 @@ pub struct Order {
     /// Order size, in atomic asset units.
     pub size: Size,
 
-    /// Order side: `Buy` or `Sell`.
+    /// Order side: `Bid` or `Ask`.
     pub side: Side,
-
-    /// ID of the order owner.
-    pub owner: TraderId,
 }
-
-/// An identifier which should uniquely determine an entry.
-pub type EntryId = usize;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// A limit order at some price limit of the order book.
@@ -48,9 +32,7 @@ struct BookEntry {
     /// is the last one at this price limit.
     next: Option<Index>,
 
-    id: EntryId,
-
-    owner: TraderId,
+    id: OrderId,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -86,7 +68,7 @@ pub struct MatchingEngine {
     best_bid: Price,
     best_ask: Price,
 
-    max_entry_id: EntryId,
+    max_order_id: OrderId,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -179,8 +161,8 @@ impl Executor for BookEntries {
             }
         }
         match order.side {
-            Side::Buy => (order.price + 1, exec_result),
-            Side::Sell => (order.price - 1, exec_result),
+            Side::Bid => (order.price + 1, exec_result),
+            Side::Ask => (order.price - 1, exec_result),
         }
     }
 
@@ -210,7 +192,7 @@ impl MatchingEngine {
             entries: BookEntries::new(capacity),
             best_bid: 0,
             best_ask: Price::max_value(),
-            max_entry_id: 0,
+            max_order_id: 0,
         }
     }
 
@@ -228,16 +210,15 @@ impl MatchingEngine {
     }
 
     /// Insert an order in the order book, and update best limits consequently.
-    fn insert_order(&mut self, order: Order) -> EntryId {
-        let id = self.max_entry_id;
+    fn insert_order(&mut self, order: Order) -> OrderId {
+        let id = self.max_order_id;
         let index = self.entries.alloc(BookEntry {
             size: order.size,
             next: None,
             id,
-            owner: order.owner,
         });
 
-        self.max_entry_id += 1;
+        self.max_order_id += 1;
 
         let price_point =
             self.price_limits
@@ -256,10 +237,10 @@ impl MatchingEngine {
         }
 
         match order.side {
-            Side::Buy if order.price > self.best_bid => {
+            Side::Bid if order.price > self.best_bid => {
                 self.best_bid = order.price;
             },
-            Side::Sell if order.price < self.best_ask => {
+            Side::Ask if order.price < self.best_ask => {
                 self.best_ask = order.price;
             },
             _ => (),
@@ -269,16 +250,16 @@ impl MatchingEngine {
     }
 
     /// Match or insert a limit order. If the order was inserted in the order book, return the
-    /// corresponding `EntryId`.
-    pub fn limit(&mut self, order: Order) -> Option<EntryId> {
+    /// corresponding `OrderId`.
+    pub fn limit(&mut self, order: Order) -> Option<OrderId> {
         let (new_price, exec_result) = match order.side {
-            Side::Buy if order.price >= self.best_ask => {
+            Side::Bid if order.price >= self.best_ask => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(self.best_ask), Bound::Included(order.price))
                 );
                 self.entries.exec_range(order.clone(), range)
             },
-            Side::Sell if order.price <= self.best_bid => {
+            Side::Ask if order.price <= self.best_bid => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(order.price), Bound::Included(self.best_bid))
                 ).rev();
@@ -296,7 +277,7 @@ impl MatchingEngine {
             ExecResult::Filled(updated_order) => {
                 // Go find the new best limit.
                 match order.side {
-                    Side::Buy => {
+                    Side::Bid => {
                         let maybe_best_ask = self.price_limits.range_mut(
                             (Bound::Included(new_price), Bound::Included(Price::max_value()))
                         ).find(|(_, limit)| limit.link.is_some());
@@ -306,7 +287,7 @@ impl MatchingEngine {
                             None => self.best_ask = Price::max_value(),
                         }
                     },
-                    Side::Sell => {
+                    Side::Ask => {
                         let maybe_best_bid = self.price_limits.range_mut(
                             (Bound::Included(0), Bound::Included(new_price))
                         ).rev().find(|(_, limit)| limit.link.is_some());

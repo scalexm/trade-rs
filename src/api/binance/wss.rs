@@ -197,13 +197,18 @@ impl Handler {
         let notif = match event.as_ref() {
             "trade" => {
                 let trade: BinanceTrade = serde_json::from_value(json)?;
+                let (consumer_order_id, maker_order_id) = match trade.m {
+                    true => (trade.a, trade.b),
+                    false => (trade.b, trade.a),
+                };
                 Some(
                     Notification::Trade(Trade {
                         size: self.params.size_tick.convert_unticked(&trade.q)?,
                         time: trade.T,
                         price: self.params.price_tick.convert_unticked(&trade.p)?,
-                        buyer_id: trade.b,
-                        seller_id: trade.a,
+                        consumer_order_id,
+                        maker_order_id,
+                        maker_side: if trade.m { Side::Bid } else { Side::Ask },
                     })
                 )
             },
