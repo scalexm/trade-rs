@@ -7,7 +7,6 @@ fn new_order(price: Price, size: Size, side: Side) -> Order {
         price,
         size,
         side,
-        owner: 0,
     }
 }
 

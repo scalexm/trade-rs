@@ -22,8 +22,8 @@ fn main() -> std::io::Result<()> {
         secret_key: String::new(),
     }).unwrap();
 
-    let mut trades = File::open("trades.txt")?;
-    let mut depth_updates = File::open("updates.txt")?;
+    let mut trades = File::create("trades.txt")?;
+    let mut depth_updates = File::create("updates.txt")?;
 
     let fut = client.stream().for_each(|notif| {
         match notif {
