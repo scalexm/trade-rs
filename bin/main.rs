@@ -16,8 +16,8 @@ fn main() -> std::io::Result<()> {
             symbol: binance::SymbolInfo {
                 name: "btcusdt".to_owned(),
                 price_tick: Tick::new(100),
-                size_tick: Tick::new(1000000),
-                commission_tick: Tick::new(100000000)
+                size_tick: Tick::new(1_000_000),
+                commission_tick: Tick::new(100_000_000)
             },
             ws_address: "wss://stream.binance.com:9443".to_owned(),
             http_address: "https://www.binance.com".to_owned(),
@@ -31,12 +31,12 @@ fn main() -> std::io::Result<()> {
     let fut = client.stream().for_each(|notif| {
         match notif {
             Notification::Trade(trade) => {
-                write!(
+                writeln!(
                     trades,
-                    "trade,{},{},{},{},{},{:?}\n",
+                    "trade,{},{},{},{},{},{:?}",
                     trade.time,
                     Tick::new(100).convert_ticked(trade.price).unwrap(),
-                    Tick::new(1000000).convert_ticked(trade.size).unwrap(),
+                    Tick::new(1_000_000).convert_ticked(trade.size).unwrap(),
                     trade.consumer_order_id,
                     trade.maker_order_id,
                     trade.maker_side,
@@ -44,13 +44,13 @@ fn main() -> std::io::Result<()> {
             }
             Notification::LimitUpdates(updates) => {
                 for update in updates {
-                    write!(
+                    writeln!(
                         depth_updates,
-                        "update,{},{:?},{},{}\n",
+                        "update,{},{:?},{},{}",
                         update.timestamp,
                         update.side,
                         Tick::new(100).convert_ticked(update.price).unwrap(),
-                        Tick::new(1000000).convert_ticked(update.size).unwrap()
+                        Tick::new(1_000_000).convert_ticked(update.size).unwrap()
                     ).unwrap();
                 }
             },

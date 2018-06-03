@@ -73,5 +73,5 @@ pub fn timestamp_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)
                                      .expect("time went backward");
-    timestamp.as_secs() * 1000 + timestamp.subsec_millis() as u64
+    timestamp.as_secs() * 1000 + u64::from(timestamp.subsec_millis())
 }

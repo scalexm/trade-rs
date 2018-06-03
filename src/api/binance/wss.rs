@@ -194,8 +194,8 @@ impl Handler {
     }
 
     /// Process a (should-be) JSON message sent by binance.
-    fn process_message(&mut self, json: String) -> Result<Option<Notification>, Error> {
-        let json: serde_json::Value = serde_json::from_str(&json)?;
+    fn process_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
+        let json: serde_json::Value = serde_json::from_str(json)?;
         let event = match json["e"].as_str() {
             Some(event) => event.to_string(),
             None => return Ok(None),
@@ -410,7 +410,7 @@ impl ws::Handler for Handler {
 
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(json) = msg {
-            match self.process_message(json) {
+            match self.process_message(&json) {
                 // Depth update notif: behavior depends on the status of the order book snapshot.
                 Ok(Some(Notification::LimitUpdates(updates))) => match self.book_snapshot_state {
                     // Very first limit update event received: time to ask for the book snapshot.

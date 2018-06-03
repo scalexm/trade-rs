@@ -9,7 +9,7 @@ use self::arena::{Index, Arena};
 use std::{mem, fmt};
 use crate::*;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// An order.
 pub struct Order {
     /// Order price.
@@ -141,9 +141,9 @@ impl Executor for BookEntries {
         let mut exec_result = ExecResult::NotExecuted;
         for (price, limit) in range {
             if let Some(ref link) = limit.link {
-                let (maybe_index, new_order) = self.exec(link, order.clone());
+                let (maybe_index, new_order) = self.exec(link, order);
                 order = new_order;
-                exec_result = ExecResult::Filled(order.clone());
+                exec_result = ExecResult::Filled(order);
 
                 match maybe_index {
                     // All the indices prior to `index` were exhausted, hence we update the
@@ -257,13 +257,13 @@ impl MatchingEngine {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(self.best_ask), Bound::Included(order.price))
                 );
-                self.entries.exec_range(order.clone(), range)
+                self.entries.exec_range(order, range)
             },
             Side::Ask if order.price <= self.best_bid => {
                 let range = self.price_limits.range_mut(
                     (Bound::Included(order.price), Bound::Included(self.best_bid))
                 ).rev();
-                self.entries.exec_range(order.clone(), range)
+                self.entries.exec_range(order, range)
             },
             _ => (0, ExecResult::NotExecuted)
         };
@@ -313,19 +313,19 @@ impl MatchingEngine {
 impl fmt::Display for MatchingEngine {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut bid = true;
-        write!(f, "--- ASK ---\n")?;
+        writeln!(f, "--- ASK ---")?;
         for (price, limit) in self.price_limits.iter().rev() {
             if bid && *price < self.best_ask {
-                write!(f, "--- BID ---\n")?;
+                writeln!(f, "--- BID ---")?;
                 bid = false;
             }
             let size = self.entries.size_at_limit(limit);
             if size > 0 {
-                write!(f, "{}: {}\n", price, self.entries.size_at_limit(limit))?;
+                writeln!(f, "{}: {}", price, self.entries.size_at_limit(limit))?;
             }
         }
         if bid {
-            write!(f, "--- BID ---\n")?;
+            writeln!(f, "--- BID ---")?;
         }
         Ok(())
     }

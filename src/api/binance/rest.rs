@@ -159,7 +159,7 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn order_impl(&self, order: Order)
+    crate fn order_impl(&self, order: &Order)
         -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
     {
         let mut query = QueryString::new();
@@ -198,13 +198,13 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn cancel_impl(&self, cancel: Cancel)
+    crate fn cancel_impl(&self, cancel: &Cancel)
         -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
-        query.push("origClientOrderId", cancel.order_id);
-        if let Some(cancel_id) = cancel.cancel_id {
+        query.push("origClientOrderId", &cancel.order_id);
+        if let Some(cancel_id) = &cancel.cancel_id {
             query.push("newClientOrderId", cancel_id);
         }
         query.push("recvWindow", cancel.time_window);

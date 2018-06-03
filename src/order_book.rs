@@ -3,7 +3,7 @@ use std::fmt;
 use std::collections::btree_map::{BTreeMap, Entry};
 use std::cell::Cell;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 /// An order book.
 pub struct OrderBook {
     ask: BTreeMap<Price, Size>,
@@ -98,22 +98,22 @@ impl fmt::Display for OrderBook {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let display_limit = DISPLAY_LIMIT.with(|dl| dl.get());
 
-        write!(f, "--- ASK ---\n")?;
+        writeln!(f, "--- ASK ---")?;
         let ask: Vec<_> = self.ask.iter()
                                   .filter(|(_, &size)| size > 0)
                                   .take(display_limit)
                                   .collect();
         for (&price, &size) in ask.iter().rev() {
-            write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
+            writeln!(f, "{}: {}", convert_price(price), convert_size(size))?;
         }
 
-        write!(f, "--- BID ---\n")?;
+        writeln!(f, "--- BID ---")?;
         for (&price, &size) in self.bid.iter()
                                        .rev()
                                        .filter(|(_, &size)| size > 0)
                                        .take(display_limit)
         {
-            write!(f, "{}: {}\n", convert_price(price), convert_size(size))?;
+            writeln!(f, "{}: {}", convert_price(price), convert_size(size))?;
         }
 
         Ok(())

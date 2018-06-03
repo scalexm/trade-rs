@@ -115,11 +115,11 @@ pub trait ApiClient {
     fn stream(&self) -> Self::Stream;
 
     /// Send an order to the exchange.
-    fn order(&self, order: Order)
+    fn order(&self, order: &Order)
         -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>;
 
     /// Send a cancel order to the exchange.
-    fn cancel(&self, cancel: Cancel)
+    fn cancel(&self, cancel: &Cancel)
         -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>;
 
     /// Send a ping to the exchange.
