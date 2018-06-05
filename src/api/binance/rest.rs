@@ -98,7 +98,7 @@ enum Signature {
 
 impl Client {
     fn request(&self, endpoint: &str, method: Method, query: QueryString, sig: Signature)
-        -> Box<Future<Item = hyper::Chunk, Error = Error> + Send>
+        -> Box<Future<Item = hyper::Chunk, Error = Error> + Send + 'static>
     {
         let keys = self.keys.as_ref().expect(
             "cannot perform an HTTP request without a binance key pair"
@@ -154,7 +154,7 @@ impl Client {
     }
 
     crate fn order_impl(&self, order: Order)
-        -> Box<Future<Item = OrderAck, Error = Error> + Send>
+        -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
@@ -182,7 +182,7 @@ impl Client {
     }
 
     crate fn cancel_impl(&self, cancel: Cancel)
-        -> Box<Future<Item = CancelAck, Error = Error> + Send>
+        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
@@ -205,7 +205,7 @@ impl Client {
     }
 
     crate fn get_listen_key(&self)
-        -> Box<Future<Item = String, Error = Error> + Send>
+        -> Box<Future<Item = String, Error = Error> + Send + 'static>
     {
         let query = QueryString::new();
         let fut = self.request("api/v1/userDataStream", Method::POST, query, Signature::No)
@@ -220,7 +220,9 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn ping_impl(&self) -> Box<Future<Item = (), Error = Error> + Send> {
+    crate fn ping_impl(&self)
+        -> Box<Future<Item = (), Error = Error> + Send + 'static>
+    {
         let mut query = QueryString::new();
         query.push(
             "listenKey",
@@ -236,7 +238,7 @@ impl Client {
 
     /// Retrieve account information for this client.
     pub fn account_information(&self, time_window: u64)
-        -> Box<Future<Item = AccountInformation, Error = Error>>
+        -> Box<Future<Item = AccountInformation, Error = Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("recvWindow", time_window);

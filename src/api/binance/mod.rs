@@ -262,15 +262,21 @@ impl ApiClient for Client {
         self.new_stream()
     }
 
-    fn order(&self, order: Order) -> Box<Future<Item = OrderAck, Error = Error> + Send> {
+    fn order(&self, order: Order)
+        -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
+    {
         self.order_impl(order)
     }
 
-    fn cancel(&self, cancel: Cancel) -> Box<Future<Item = CancelAck, Error = Error> + Send> {
+    fn cancel(&self, cancel: Cancel)
+        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
+    {
         self.cancel_impl(cancel)
     }
 
-    fn ping(&self) -> Box<Future<Item = (), Error = Error> + Send> {
+    fn ping(&self)
+        -> Box<Future<Item = (), Error = Error> + Send + 'static>
+    {
         self.ping_impl()
     }
 }
