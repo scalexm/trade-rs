@@ -17,11 +17,11 @@ pub struct Order {
     /// Order side: `Bid` / buy or `Ask`/ sell.
     pub side: Side,
 
-    /// Order price, stringified.
-    pub price: String,
+    /// Order price.
+    pub price: Price,
 
-    /// Order size, stringified.
-    pub size: String,
+    /// Order size.
+    pub size: Size,
 
     /// Time in force, see https://www.investopedia.com/terms/t/timeinforce.asp.
     pub time_in_force: TimeInForce,

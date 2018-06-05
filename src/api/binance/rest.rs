@@ -161,8 +161,18 @@ impl Client {
         query.push("side", order.side.as_str());
         query.push("type", "LIMIT");
         query.push("timeInForce", order.time_in_force.as_str());
-        query.push("quantity", &order.size);
-        query.push("price", &order.price);
+        query.push(
+            "quantity",
+            self.params.symbol.size_tick
+                .convert_ticked(order.size)
+                .expect("bad size tick")
+        );
+        query.push(
+            "price",
+            self.params.symbol.price_tick
+                .convert_ticked(order.price)
+                .expect("bad price tick")
+        );
         if let Some(order_id) = &order.order_id {
             query.push("newClientOrderId", order_id);
         }
