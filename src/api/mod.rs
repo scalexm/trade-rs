@@ -109,17 +109,17 @@ pub enum Notification {
 pub trait ApiClient {
     /// Type returned by the `stream` implementor, used for continuously receiving
     /// notifications.
-    type Stream: Stream<Item = Notification, Error = ()>;
+    type Stream: Stream<Item = Notification, Error = ()> + Send;
 
     /// Start streaming notifications.
     fn stream(&self) -> Self::Stream;
 
     /// Send an order to the exchange.
-    fn order(&self, order: Order) -> Box<Future<Item = OrderAck, Error = Error>>;
+    fn order(&self, order: Order) -> Box<Future<Item = OrderAck, Error = Error> + Send>;
 
     /// Send a cancel order to the exchange.
-    fn cancel(&self, cancel: Cancel) -> Box<Future<Item = CancelAck, Error = Error>>;
+    fn cancel(&self, cancel: Cancel) -> Box<Future<Item = CancelAck, Error = Error> + Send>;
 
     /// Send a ping to the exchange.
-    fn ping(&self) -> Box<Future<Item = (), Error = Error>>;
+    fn ping(&self) -> Box<Future<Item = (), Error = Error> + Send>;
 }
