@@ -3,7 +3,7 @@ mod test;
 use std::fmt;
 use num::*;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An object carrying the number of ticks per unit of something
 /// and representative of its tick size.
 /// 

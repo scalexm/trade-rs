@@ -12,15 +12,17 @@ use super::{Client, RestError, Params};
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
         let params = self.params.clone();
-        let listen_key = self.listen_key.as_ref().expect("no listen key").clone();
+        let listen_key = self.keys.as_ref().map(|keys| keys.listen_key.clone());
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
-            let address = format!(
-               "{0}/ws/{1}@trade/{1}@depth/{2}",
+            let mut address = format!(
+               "{0}/ws/{1}@trade/{1}@depth",
                 params.ws_address,
-                params.symbol.to_lowercase(),
-                listen_key
+                params.symbol.name.to_lowercase(),
             );
+            if let Some(listen_key) = listen_key {
+                address += &format!("/{}", listen_key);
+            }
             info!("Initiating WebSocket connection at {}", address);
             
             if let Err(err) = ws::connect(address, |out| Handler {
@@ -179,8 +181,8 @@ impl Handler {
         Ok(
             LimitUpdate {
                 side,
-                price: self.params.price_tick.convert_unticked(&l.price)?,
-                size: self.params.size_tick.convert_unticked(&l.size)?,
+                price: self.params.symbol.price_tick.convert_unticked(&l.price)?,
+                size: self.params.symbol.size_tick.convert_unticked(&l.size)?,
                 timestamp,
             }
         )
@@ -203,9 +205,9 @@ impl Handler {
                 };
                 Some(
                     Notification::Trade(Trade {
-                        size: self.params.size_tick.convert_unticked(&trade.q)?,
+                        size: self.params.symbol.size_tick.convert_unticked(&trade.q)?,
                         time: trade.T,
-                        price: self.params.price_tick.convert_unticked(&trade.p)?,
+                        price: self.params.symbol.price_tick.convert_unticked(&trade.p)?,
                         consumer_order_id,
                         maker_order_id,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
@@ -247,10 +249,14 @@ impl Handler {
                     "TRADE" => Some(
                         Notification::OrderUpdate(OrderUpdate {
                             order_id: report.c,
-                            consumed_size: self.params.size_tick.convert_unticked(&report.l)?,
-                            total_size: self.params.size_tick.convert_unticked(&report.q)?,
-                            consumed_price: self.params.price_tick.convert_unticked(&report.L)?,
-                            commission: self.params.commission_tick.convert_unticked(&report.n)?,
+                            consumed_size: self.params.symbol.size_tick
+                                .convert_unticked(&report.l)?,
+                            total_size: self.params.symbol.size_tick
+                                .convert_unticked(&report.q)?,
+                            consumed_price: self.params.symbol.price_tick
+                                .convert_unticked(&report.L)?,
+                            commission: self.params.symbol.commission_tick
+                                .convert_unticked(&report.n)?,
                             timestamp: report.T,
                         })
                     ),
@@ -419,7 +425,7 @@ impl ws::Handler for Handler {
                         let address = format!(
                             "{}/api/v1/depth?symbol={}&limit=1000",
                             self.params.http_address,
-                            self.params.symbol.to_uppercase()
+                            self.params.symbol.name.to_uppercase()
                         ).parse().expect("invalid address");
 
                         info!("Initiating LOB request at {}", address);

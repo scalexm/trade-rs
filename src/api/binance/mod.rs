@@ -6,17 +6,11 @@ use tick::Tick;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-/// Params needed for a binance API client.
-pub struct Params {
-    /// Currency symbol in lower case, e.g. "trxbtc".
-    pub symbol: String,
-
-    /// WebSocket API address.
-    pub ws_address: String,
-
-    /// HTTP REST API address.
-    pub http_address: String,
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A type carrying information about the traded symbol.
+pub struct SymbolInfo {
+    /// Symbol name.
+    pub name: String,
 
     /// Tick unit for prices.
     pub price_tick: Tick,
@@ -26,12 +20,54 @@ pub struct Params {
 
     /// Tick unit for commissions.
     pub commission_tick: Tick,
+}
 
-    /// Binance API Key.
-    pub api_key: String,
+impl SymbolInfo {
+    pub fn new(name: String, price_tick: Tick, size_tick: Tick, commission_tick: Tick)
+        -> Self
+    {
+        SymbolInfo {
+            name,
+            price_tick,
+            size_tick,
+            commission_tick,
+        }
+    }
+}
 
-    /// Binance secrey key.
-    pub secret_key: String,
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A binance key pair: api key + secret key.
+pub struct KeyPair {
+    api_key: String,
+    secret_key: String,
+}
+
+impl KeyPair {
+    pub fn new(api_key: String, secret_key: String) -> Self {
+        KeyPair {
+            api_key,
+            secret_key,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// Params needed for a binance API client.
+pub struct Params {
+    /// Symbol information.
+    pub symbol: SymbolInfo,
+
+    /// WebSocket API address.
+    pub ws_address: String,
+
+    /// HTTP REST API address.
+    pub http_address: String,
+}
+
+struct Keys {
+    api_key: String,
+    secret_key: PKey<Private>,
+    listen_key: String,
 }
 
 /// A binance API client.
@@ -47,8 +83,7 @@ pub struct Params {
 /// The only way to fix it will be to drop the client and create a new one.
 pub struct Client {
     params: Params,
-    secret_key: PKey<Private>,
-    listen_key: Option<String>,
+    keys: Option<Keys>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -188,23 +223,35 @@ impl RestErrorCategory {
 impl Client {
     /// Create a new binance API client with given `params` and request a listen key
     /// for the user data stream. The request will block the thread.
-    pub fn new(params: Params) -> Result<Self, Error> {
-        let secret_key = PKey::hmac(params.secret_key.as_bytes())?;
+    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error> {
+        match key_pair {
+            Some(pair) => {
+                let secret_key = PKey::hmac(pair.secret_key.as_bytes())?;
 
-        let mut client = Client {
-            secret_key,
-            params,
-            listen_key: None,
-        };
+                let mut client = Client {
+                    params,
+                    keys: Some(Keys {
+                        api_key: pair.api_key,
+                        secret_key,
+                        listen_key: String::new(),
+                    })
+                };
 
-        use tokio::runtime::current_thread;
-        info!("Requesting listen key");
-        let key = current_thread::Runtime::new().unwrap()
-                                                .block_on(client.get_listen_key())?;
-        info!("Received listen key");
+                use tokio::runtime::current_thread;
+                info!("Requesting listen key");
+                let listen_key = current_thread::Runtime::new()
+                    .unwrap()
+                    .block_on(client.get_listen_key())?;
+                info!("Received listen key");
 
-        client.listen_key = Some(key);
-        Ok(client)
+                client.keys.as_mut().unwrap().listen_key = listen_key;
+                Ok(client)
+            }
+            None => Ok(Client {
+                params,
+                keys: None,
+            })
+        }
     }
 }
 

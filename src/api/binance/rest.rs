@@ -100,9 +100,13 @@ impl Client {
     fn request(&self, endpoint: &str, method: Method, query: QueryString, sig: Signature)
         -> Box<Future<Item = hyper::Chunk, Error = Error>>
     {
+        let keys = self.keys.as_ref().expect(
+            "cannot perform an HTTP request without a binance key pair"
+        );
+
         let query = match sig {
             Signature::No => query.into_string(),
-            Signature::Yes => query.into_string_with_signature(&self.secret_key),
+            Signature::Yes => query.into_string_with_signature(&keys.secret_key),
         };
 
         let address = format!(
@@ -116,7 +120,7 @@ impl Client {
         let request = Request::builder()
             .method(method)
             .uri(&address)
-            .header("X-MBX-APIKEY", self.params.api_key.as_bytes())
+            .header("X-MBX-APIKEY", keys.api_key.as_bytes())
             .body(Body::empty());
         
         let request = match request {
@@ -153,7 +157,7 @@ impl Client {
         -> Box<Future<Item = OrderAck, Error = Error>>
     {
         let mut query = QueryString::new();
-        query.push("symbol", self.params.symbol.to_uppercase());
+        query.push("symbol", self.params.symbol.name.to_uppercase());
         query.push("side", order.side.as_str());
         query.push("type", "LIMIT");
         query.push("timeInForce", order.time_in_force.as_str());
@@ -181,7 +185,7 @@ impl Client {
         -> Box<Future<Item = CancelAck, Error = Error>>
     {
         let mut query = QueryString::new();
-        query.push("symbol", self.params.symbol.to_uppercase());
+        query.push("symbol", self.params.symbol.name.to_uppercase());
         query.push("origClientOrderId", cancel.order_id);
         if let Some(cancel_id) = cancel.cancel_id {
             query.push("newClientOrderId", cancel_id);
@@ -218,7 +222,12 @@ impl Client {
 
     crate fn ping_impl(&self) -> Box<Future<Item = (), Error = Error>> {
         let mut query = QueryString::new();
-        query.push("listenKey", self.listen_key.as_ref().expect("no listen key"));
+        query.push(
+            "listenKey",
+            &self.keys.as_ref().expect(
+                "cannot perform an HTTP request without a binance key pair"
+            ).listen_key
+        );
 
         let fut = self.request("api/v1/userDataStream", Method::PUT, query, Signature::No)
             .and_then(|_| Ok(()));

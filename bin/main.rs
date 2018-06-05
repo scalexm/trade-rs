@@ -11,16 +11,19 @@ use std::io::Write;
 fn main() -> std::io::Result<()> {
     env_logger::init();
 
-    let client = binance::Client::new(binance::Params {
-        symbol: "btcusdt".to_owned(),
-        ws_address: "wss://stream.binance.com:9443".to_owned(),
-        http_address: "https://www.binance.com".to_owned(),
-        price_tick: Tick::new(100),
-        size_tick: Tick::new(1000000),
-        commission_tick: Tick::new(100000000),
-        api_key: String::new(),
-        secret_key: String::new(),
-    }).unwrap();
+    let client = binance::Client::new(
+        binance::Params {
+            symbol: binance::SymbolInfo::new(
+                "btcusdt".to_owned(),
+                Tick::new(100),
+                Tick::new(1000000),
+                Tick::new(100000000)
+            ),
+            ws_address: "wss://stream.binance.com:9443".to_owned(),
+            http_address: "https://www.binance.com".to_owned(),
+        },
+        None
+    ).unwrap();
 
     let mut trades = File::create("trades.txt")?;
     let mut depth_updates = File::create("updates.txt")?;
