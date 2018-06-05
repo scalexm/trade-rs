@@ -111,27 +111,15 @@ pub trait ApiClient {
     /// notifications.
     type Stream: Stream<Item = Notification, Error = ()>;
 
-    /// Type returned by the `order` implementor, used for awaiting the execution of
-    /// an order.
-    type FutureOrder: Future<Item = OrderAck, Error = Error>;
-
-    /// Type returned by the `cancel` implementor, used for awaiting the execution of
-    /// a cancel order.
-    type FutureCancel: Future<Item = CancelAck, Error = Error>;
-
-    /// Type returned by the `ping` implementor, used for awaiting the execution of
-    /// a ping.
-    type FuturePing: Future<Item = (), Error = Error>;
-
     /// Start streaming notifications.
     fn stream(&self) -> Self::Stream;
 
     /// Send an order to the exchange.
-    fn order(&self, order: Order) -> Self::FutureOrder;
+    fn order(&self, order: Order) -> Box<Future<Item = OrderAck, Error = Error>>;
 
     /// Send a cancel order to the exchange.
-    fn cancel(&self, cancel: Cancel) -> Self::FutureCancel;
+    fn cancel(&self, cancel: Cancel) -> Box<Future<Item = CancelAck, Error = Error>>;
 
     /// Send a ping to the exchange.
-    fn ping(&self) -> Self::FuturePing;
+    fn ping(&self) -> Box<Future<Item = (), Error = Error>>;
 }

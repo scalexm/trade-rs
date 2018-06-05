@@ -257,23 +257,20 @@ impl Client {
 
 impl ApiClient for Client {
     type Stream = futures::sync::mpsc::UnboundedReceiver<Notification>;
-    type FutureOrder = Box<Future<Item = OrderAck, Error = Error>>;
-    type FutureCancel = Box<Future<Item = CancelAck, Error = Error>>;
-    type FuturePing = Box<Future<Item = (), Error = Error>>;
 
     fn stream(&self) -> Self::Stream {
         self.new_stream()
     }
 
-    fn order(&self, order: Order) -> Self::FutureOrder {
+    fn order(&self, order: Order) -> Box<Future<Item = OrderAck, Error = Error>> {
         self.order_impl(order)
     }
 
-    fn cancel(&self, cancel: Cancel) -> Self::FutureCancel {
+    fn cancel(&self, cancel: Cancel) -> Box<Future<Item = CancelAck, Error = Error>> {
         self.cancel_impl(cancel)
     }
 
-    fn ping(&self) -> Self::FuturePing {
+    fn ping(&self) -> Box<Future<Item = (), Error = Error>> {
         self.ping_impl()
     }
 }
