@@ -13,12 +13,12 @@ fn main() -> std::io::Result<()> {
 
     let client = binance::Client::new(
         binance::Params {
-            symbol: binance::SymbolInfo::new(
-                "btcusdt".to_owned(),
-                Tick::new(100),
-                Tick::new(1000000),
-                Tick::new(100000000)
-            ),
+            symbol: binance::SymbolInfo {
+                name: "btcusdt".to_owned(),
+                price_tick: Tick::new(100),
+                size_tick: Tick::new(1000000),
+                commission_tick: Tick::new(100000000)
+            },
             ws_address: "wss://stream.binance.com:9443".to_owned(),
             http_address: "https://www.binance.com".to_owned(),
         },

@@ -15,14 +15,40 @@ pub struct Tick {
     ticks_per_unit: u64,
 }
 
+impl fmt::Display for Tick {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}^-1)", self.ticks_per_unit)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+enum ValueType {
+    Ticked(u64),
+    Unticked(String),
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
+#[fail(display = "Failed to convert {:?} with tick {}", value, tick)]
 /// An error which indicated that the conversion of an unticked value to a
 /// value in ticks has failed.
-pub struct ConversionError(Tick);
+pub struct ConversionError {
+    tick: Tick,
+    value: ValueType,
+}
 
-impl fmt::Display for ConversionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Failed to convert unticked value with tick {:?}", self.0)
+impl ConversionError {
+    fn ticked(value: u64, tick: Tick) -> Self {
+        ConversionError {
+            tick,
+            value: ValueType::Ticked(value),
+        }
+    }
+
+    fn unticked(value: &str, tick: Tick) -> Self {
+        ConversionError {
+            tick,
+            value: ValueType::Unticked(value.to_owned()),
+        }
     }
 }
 
@@ -48,7 +74,7 @@ impl Tick {
         let (int, fract) = match (parts.next(), parts.next()) {
             (Some(int), Some(fract)) => (int, fract),
             (Some(int), None) => (int, ""),
-            (None, _) => return Err(ConversionError(*self)),
+            (None, _) => return Err(ConversionError::unticked(unticked, *self)),
         };
 
         let ratio: rational::Ratio<u64> = match Num::from_str_radix(
@@ -57,13 +83,13 @@ impl Tick {
         )
         {
             Ok(result) => result,
-            Err(..) => return Err(ConversionError(*self)),
+            Err(..) => return Err(ConversionError::unticked(unticked, *self)),
         };
 
         let ratio = rational::Ratio::from_integer(self.ticks_per_unit) * ratio;
 
         if !ratio.is_integer() {
-            return Err(ConversionError(*self));
+            return Err(ConversionError::unticked(unticked, *self));
         }
 
         Ok(ratio.to_integer())
@@ -81,7 +107,7 @@ impl Tick {
         }
 
         if pow % self.ticks_per_unit != 0 {
-            return Err(ConversionError(*self));
+            return Err(ConversionError::ticked(ticked, *self));
         }
 
         let int = ticked / self.ticks_per_unit;

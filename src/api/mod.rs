@@ -125,4 +125,6 @@ pub trait ApiClient {
     /// Send a ping to the exchange.
     fn ping(&self)
         -> Box<Future<Item = (), Error = Error> + Send + 'static>;
+    
+    fn weight_estimate(&self) -> usize;
 }

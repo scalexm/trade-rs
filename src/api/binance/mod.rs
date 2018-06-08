@@ -5,6 +5,7 @@ use api::*;
 use tick::Tick;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
+use std::cell::Cell;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A type carrying information about the traded symbol.
@@ -20,19 +21,6 @@ pub struct SymbolInfo {
 
     /// Tick unit for commissions.
     pub commission_tick: Tick,
-}
-
-impl SymbolInfo {
-    pub fn new(name: String, price_tick: Tick, size_tick: Tick, commission_tick: Tick)
-        -> Self
-    {
-        SymbolInfo {
-            name,
-            price_tick,
-            size_tick,
-            commission_tick,
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -84,6 +72,7 @@ struct Keys {
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
+    cum_weight: Cell<usize>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -234,7 +223,8 @@ impl Client {
                         api_key: pair.api_key,
                         secret_key,
                         listen_key: String::new(),
-                    })
+                    }),
+                    cum_weight: Cell::new(0),
                 };
 
                 use tokio::runtime::current_thread;
@@ -250,8 +240,13 @@ impl Client {
             None => Ok(Client {
                 params,
                 keys: None,
+                cum_weight: Cell::new(0),
             })
         }
+    }
+
+    pub fn incr_weight(&self, weight: usize) {
+        self.cum_weight.set(self.cum_weight.get() + weight);
     }
 }
 
@@ -278,6 +273,10 @@ impl ApiClient for Client {
         -> Box<Future<Item = (), Error = Error> + Send + 'static>
     {
         self.ping_impl()
+    }
+
+    fn weight_estimate(&self) -> usize {
+        self.cum_weight.get()
     }
 }
 
