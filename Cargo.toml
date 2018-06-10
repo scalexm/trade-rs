@@ -23,10 +23,6 @@ tokio = "^0.1"
 version = "^0.7"
 features = ["ssl"]
 
-[[bin]]
-name = "bin"
-path = "bin/main.rs"
-
 [lib]
 name = "trade_rs"
 path = "src/lib.rs"

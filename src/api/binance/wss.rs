@@ -154,15 +154,15 @@ struct BinanceExecutionReport {
     x: String,
     X: String,
     r: String,
-    i: u64,
+    i: i64,
     l: String,
     z: String,
     L: String,
     n: String,
-    N: String,
+   // N: String,
     T: u64,
     t: i64,
-    I: u64,
+    I: i64,
     w: bool,
     m: bool,
     M: bool
@@ -249,20 +249,28 @@ impl Handler {
 
             "executionReport" => {
                 let report: BinanceExecutionReport = serde_json::from_value(json)?;
-                debug!("execution report: {:?}", report);
 
-                match report.X.as_ref() {
+                match report.x.as_ref() {
                     "TRADE" => Some(
                         Notification::OrderUpdate(OrderUpdate {
                             order_id: report.c,
+
                             consumed_size: self.params.symbol.size_tick
                                 .convert_unticked(&report.l)?,
-                            total_size: self.params.symbol.size_tick
-                                .convert_unticked(&report.q)?,
+
+                            remaining_size:
+                                self.params.symbol.size_tick
+                                    .convert_unticked(&report.q)?
+                                -
+                                self.params.symbol.size_tick
+                                    .convert_unticked(&report.z)?,
+
                             consumed_price: self.params.symbol.price_tick
                                 .convert_unticked(&report.L)?,
+
                             commission: self.params.symbol.commission_tick
                                 .convert_unticked(&report.n)?,
+
                             timestamp: report.T,
                         })
                     ),
@@ -468,8 +476,8 @@ impl ws::Handler for Handler {
                                 Ok(())
                             });
 
-                            use tokio::runtime::current_thread;
-                            let mut runtime = current_thread::Runtime::new().unwrap();
+                            use tokio::runtime;
+                            let mut runtime = runtime::current_thread::Runtime::new().unwrap();
                             runtime.spawn(fut);
                             runtime.run().unwrap();
                         });

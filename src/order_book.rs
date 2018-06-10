@@ -80,14 +80,14 @@ pub fn display_size_tick(maybe_tick: Option<Tick>) {
     DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
 }
 
-fn convert_price(ticked: Price) -> String {
+pub fn displayable_price(ticked: Price) -> String {
     match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.convert_ticked(ticked).unwrap(),
         None => format!("{}", ticked),
     }
 }
 
-fn convert_size(ticked: Size) -> String {
+pub fn displayable_size(ticked: Size) -> String {
     match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.convert_ticked(ticked).unwrap(),
         None => format!("{}", ticked),
@@ -98,23 +98,24 @@ impl fmt::Display for OrderBook {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let display_limit = DISPLAY_LIMIT.with(|dl| dl.get());
 
-        writeln!(f, "--- ASK ---")?;
+        writeln!(f, "## ASK")?;
         let ask: Vec<_> = self.ask.iter()
                                   .filter(|(_, &size)| size > 0)
                                   .take(display_limit)
                                   .collect();
         for (&price, &size) in ask.iter().rev() {
-            writeln!(f, "{}: {}", convert_price(price), convert_size(size))?;
+            writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;
         }
 
-        writeln!(f, "--- BID ---")?;
+        write!(f, "\n\n")?;
         for (&price, &size) in self.bid.iter()
                                        .rev()
                                        .filter(|(_, &size)| size > 0)
                                        .take(display_limit)
         {
-            writeln!(f, "{}: {}", convert_price(price), convert_size(size))?;
+            writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;
         }
+        writeln!(f, "## BID")?;
 
         Ok(())
     }

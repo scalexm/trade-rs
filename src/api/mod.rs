@@ -75,8 +75,8 @@ pub struct OrderUpdate {
     pub consumed_size: Size,
 
     /// Total remaining size for this order (can be maintained in a standalone way
-    /// using `consumed_size` and `commission`).
-    pub total_size: Size,
+    /// using the size of the order at insertion time, `consumed_size` and `commission`).
+    pub remaining_size: Size,
 
     /// Price at which the last trade happened.
     pub consumed_price: Price,
