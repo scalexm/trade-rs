@@ -5,7 +5,6 @@ use api::*;
 use tick::Tick;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
-use std::cell::Cell;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A type carrying information about the traded symbol.
@@ -72,7 +71,6 @@ struct Keys {
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
-    cum_weight: Cell<usize>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -224,7 +222,6 @@ impl Client {
                         secret_key,
                         listen_key: String::new(),
                     }),
-                    cum_weight: Cell::new(0),
                 };
 
                 use tokio::runtime::current_thread;
@@ -240,13 +237,8 @@ impl Client {
             None => Ok(Client {
                 params,
                 keys: None,
-                cum_weight: Cell::new(0),
             })
         }
-    }
-
-    pub fn incr_weight(&self, weight: usize) {
-        self.cum_weight.set(self.cum_weight.get() + weight);
     }
 }
 
@@ -273,10 +265,6 @@ impl ApiClient for Client {
         -> Box<Future<Item = (), Error = Error> + Send + 'static>
     {
         self.ping_impl()
-    }
-
-    fn weight_estimate(&self) -> usize {
-        self.cum_weight.get()
     }
 }
 

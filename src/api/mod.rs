@@ -89,6 +89,26 @@ pub struct OrderUpdate {
     pub timestamp: u64,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// A liquidity consuming order.
+pub struct Trade {
+    /// Size consumed by the trade.
+    pub size: Size,
+
+    // Trade timestamp, in ms.
+    pub time: u64,
+
+    /// Price in ticks.
+    pub price: Price,
+
+    /// Side of the maker:
+    /// * if `Ask`, then the maker was providing liquidity on the ask side,
+    ///   i.e. the consumer bought to the maker
+    /// * if `Bid`, then the maker was providing liquidity on the bid side,
+    ///   i.e. the consumer sold to the maker
+    pub maker_side: Side,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// A notification that some event happened.
 pub enum Notification {
@@ -125,6 +145,4 @@ pub trait ApiClient {
     /// Send a ping to the exchange.
     fn ping(&self)
         -> Box<Future<Item = (), Error = Error> + Send + 'static>;
-    
-    fn weight_estimate(&self) -> usize;
 }

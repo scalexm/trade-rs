@@ -96,12 +96,6 @@ enum Signature {
     Yes,
 }
 
-const ORDER_WEIGHT: usize = 1;
-const CANCEL_WEIGHT: usize = 1;
-const ACCOUNT_INFO_WEIGHT: usize = 5;
-const LISTEN_KEY_WEIGHT: usize = 1;
-const PING_WEIGHT: usize = 1;
-
 impl Client {
     fn request(&self, endpoint: &str, method: Method, query: QueryString, sig: Signature)
         -> Box<Future<Item = hyper::Chunk, Error = Error> + Send + 'static>
@@ -185,7 +179,6 @@ impl Client {
         query.push("recvWindow", order.time_window);
         query.push("timestamp", timestamp_ms());
 
-        self.incr_weight(ORDER_WEIGHT);
         let fut = self.request("api/v3/order", Method::POST, query, Signature::Yes)
             .and_then(|body|
         {
@@ -210,7 +203,6 @@ impl Client {
         query.push("recvWindow", cancel.time_window);
         query.push("timestamp", timestamp_ms());
 
-        self.incr_weight(CANCEL_WEIGHT);
         let fut = self.request("api/v3/order", Method::DELETE, query, Signature::Yes)
             .and_then(|body|
         {
@@ -226,7 +218,6 @@ impl Client {
         -> Box<Future<Item = String, Error = Error> + Send + 'static>
     {
         let query = QueryString::new();
-        self.incr_weight(LISTEN_KEY_WEIGHT);
         let fut = self.request("api/v1/userDataStream", Method::POST, query, Signature::No)
             .and_then(|body|
         {
@@ -243,7 +234,6 @@ impl Client {
         -> Box<Future<Item = (), Error = Error> + Send + 'static>
     {
         let mut query = QueryString::new();
-        self.incr_weight(PING_WEIGHT);
         query.push(
             "listenKey",
             &self.keys.as_ref().expect(
@@ -264,7 +254,6 @@ impl Client {
         query.push("recvWindow", time_window);
         query.push("timestamp", timestamp_ms());
 
-        self.incr_weight(ACCOUNT_INFO_WEIGHT);
         let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
             .and_then(|body|
         {

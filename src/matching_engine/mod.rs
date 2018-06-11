@@ -9,6 +9,8 @@ use self::arena::{Index, Arena};
 use std::{mem, fmt};
 use crate::*;
 
+pub type OrderId = usize;
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// An order.
 pub struct Order {

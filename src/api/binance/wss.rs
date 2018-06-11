@@ -9,12 +9,9 @@ use serde_json;
 use futures::{prelude::*, sync::mpsc::*};
 use super::{Client, RestError, Params};
 
-const DEPTH_WEIGHT: usize = 10;
-
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
         // Anticipate the book snapshot request
-        self.incr_weight(DEPTH_WEIGHT);
 
         let params = self.params.clone();
         let listen_key = self.keys.as_ref().map(|keys| keys.listen_key.clone());
@@ -204,17 +201,11 @@ impl Handler {
         let notif = match event.as_ref() {
             "trade" => {
                 let trade: BinanceTrade = serde_json::from_value(json)?;
-                let (consumer_order_id, maker_order_id) = match trade.m {
-                    true => (trade.a, trade.b),
-                    false => (trade.b, trade.a),
-                };
                 Some(
                     Notification::Trade(Trade {
                         size: self.params.symbol.size_tick.convert_unticked(&trade.q)?,
                         time: trade.T,
                         price: self.params.symbol.price_tick.convert_unticked(&trade.p)?,
-                        consumer_order_id,
-                        maker_order_id,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
                     })
                 )
