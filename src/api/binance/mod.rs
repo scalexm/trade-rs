@@ -2,54 +2,10 @@ mod wss;
 mod rest;
 
 use api::*;
-use tick::Tick;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// A type carrying information about the traded symbol.
-pub struct SymbolInfo {
-    /// Symbol name.
-    pub name: String,
-
-    /// Tick unit for prices.
-    pub price_tick: Tick,
-
-    /// Tick unit for sizes.
-    pub size_tick: Tick,
-
-    /// Tick unit for commissions.
-    pub commission_tick: Tick,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// A binance key pair: api key + secret key.
-pub struct KeyPair {
-    api_key: String,
-    secret_key: String,
-}
-
-impl KeyPair {
-    pub fn new(api_key: String, secret_key: String) -> Self {
-        KeyPair {
-            api_key,
-            secret_key,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// Params needed for a binance API client.
-pub struct Params {
-    /// Symbol information.
-    pub symbol: SymbolInfo,
-
-    /// WebSocket API address.
-    pub ws_address: String,
-
-    /// HTTP REST API address.
-    pub http_address: String,
-}
+pub use api::params::*;
 
 struct Keys {
     api_key: String,
@@ -108,7 +64,7 @@ impl std::fmt::Display for RestError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.category)?;
         if let Some(error_msg) = &self.error_msg {
-            write!(f, r#": "{}""#, error_msg)?;
+            write!(f, ": `{}`", error_msg)?;
         }
         if let Some(error_code) = self.error_code {
             write!(f, " (error_code = {})", error_code)?;

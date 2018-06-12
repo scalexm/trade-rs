@@ -1,6 +1,7 @@
 #![feature(crate_in_paths)]
 #![feature(crate_visibility_modifier)]
 #![feature(nll)]
+#![feature(try_from)]
 
 extern crate ws;
 extern crate futures;
@@ -15,6 +16,7 @@ extern crate tokio;
 extern crate num;
 extern crate openssl;
 extern crate hex;
+extern crate chrono;
 
 pub mod matching_engine;
 pub mod api;

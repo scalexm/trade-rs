@@ -1,7 +1,8 @@
 mod test;
 
 use std::fmt;
-use num::*;
+use num::{Num, rational};
+use std::convert::TryInto;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An object carrying the number of ticks per unit of something
@@ -77,7 +78,7 @@ impl Tick {
             (None, _) => return Err(ConversionError::unticked(unticked, *self)),
         };
 
-        let ratio: rational::Ratio<u64> = match Num::from_str_radix(
+        let ratio: rational::Ratio<u128> = match Num::from_str_radix(
             &format!("{}{}/{}", int, fract, 10_u64.pow(fract.len() as u32)),
             10
         )
@@ -86,13 +87,13 @@ impl Tick {
             Err(..) => return Err(ConversionError::unticked(unticked, *self)),
         };
 
-        let ratio = rational::Ratio::from_integer(self.ticks_per_unit) * ratio;
+        let ratio = rational::Ratio::from_integer(u128::from(self.ticks_per_unit)) * ratio;
 
         if !ratio.is_integer() {
             return Err(ConversionError::unticked(unticked, *self));
         }
 
-        Ok(ratio.to_integer())
+        Ok(ratio.to_integer().try_into().unwrap())
     }
 
     /// Convert a value expressed in ticks back to an unticked value.
@@ -111,10 +112,14 @@ impl Tick {
         }
 
         let int = ticked / self.ticks_per_unit;
+        let prevent_overflow = u128::from(pow) * u128::from(ticked)
+            / u128::from(self.ticks_per_unit);
+        let prevent_overflow: u64 = prevent_overflow.try_into().unwrap();
+        
         Ok(format!(
                 "{0}.{1:02$}",
             int,
-            (pow * ticked / self.ticks_per_unit) % pow,
+            prevent_overflow % pow,
             pad
         ))
     }

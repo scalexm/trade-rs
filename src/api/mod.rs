@@ -1,4 +1,6 @@
 pub mod binance;
+pub mod gdax;
+mod params;
 
 use crate::*;
 use futures::prelude::*;
@@ -96,7 +98,7 @@ pub struct Trade {
     pub size: Size,
 
     // Trade timestamp, in ms.
-    pub time: u64,
+    pub timestamp: u64,
 
     /// Price in ticks.
     pub price: Price,

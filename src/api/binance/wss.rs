@@ -11,8 +11,6 @@ use super::{Client, RestError, Params};
 
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
-        // Anticipate the book snapshot request
-
         let params = self.params.clone();
         let listen_key = self.keys.as_ref().map(|keys| keys.listen_key.clone());
         let (snd, rcv) = unbounded();
@@ -27,7 +25,7 @@ impl Client {
             }
             info!("Initiating WebSocket connection at {}", address);
             
-            if let Err(err) = ws::connect(address, |out| Handler {
+            if let Err(err) = ws::connect(address.as_ref(), |out| Handler {
                 out,
                 snd: snd.clone(),
                 params: params.clone(),
@@ -36,7 +34,7 @@ impl Client {
                 previous_u: None,
             })
             {
-                error!(r#"WebSocket connection terminated with error: "{}""#, err);
+                error!("WebSocket connection terminated with error: `{}`", err);
             }   
         });
         
@@ -204,7 +202,7 @@ impl Handler {
                 Some(
                     Notification::Trade(Trade {
                         size: self.params.symbol.size_tick.convert_unticked(&trade.q)?,
-                        time: trade.T,
+                        timestamp: trade.T,
                         price: self.params.symbol.price_tick.convert_unticked(&trade.p)?,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
                     })
@@ -358,7 +356,7 @@ impl ws::Handler for Handler {
                                     },
                                     Err(err) => {
                                         error!(
-                                            r#"LOB processing encountered error: "{}""#,
+                                            "LOB processing encountered error: `{}`",
                                             err
                                         );
                                     
@@ -433,7 +431,7 @@ impl ws::Handler for Handler {
                             self.params.symbol.name.to_uppercase()
                         ).parse().expect("invalid address");
 
-                        info!("Initiating LOB request at {}", address);
+                        info!("Initiating LOB request at `{}`", address);
 
                         thread::spawn(move || {
                             let https = match hyper_tls::HttpsConnector::new(2) {
@@ -502,7 +500,7 @@ impl ws::Handler for Handler {
                 Ok(None) => (),
 
                 Err(err) => {
-                    error!(r#"Message parsing encountered error: "{}""#, err)
+                    error!("Message parsing encountered error: `{}`", err)
                 }
             };
         }
