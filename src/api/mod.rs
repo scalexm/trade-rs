@@ -1,6 +1,7 @@
 pub mod binance;
 pub mod gdax;
 mod params;
+mod wss;
 
 use crate::*;
 use futures::prelude::*;

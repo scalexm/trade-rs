@@ -1,4 +1,4 @@
-use trade_rs::order_book;
+use trade::order_book;
 use super::Prompt;
 
 use cursive::Printer;

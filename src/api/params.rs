@@ -17,23 +17,7 @@ pub struct SymbolInfo {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// A binance key pair: api key + secret key.
-pub struct KeyPair {
-    crate api_key: String,
-    crate secret_key: String,
-}
-
-impl KeyPair {
-    pub fn new(api_key: String, secret_key: String) -> Self {
-        KeyPair {
-            api_key,
-            secret_key,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// Params needed for a binance API client.
+/// Params needed for an API client.
 pub struct Params {
     /// Symbol information.
     pub symbol: SymbolInfo,

@@ -57,6 +57,16 @@ impl OrderBook {
         };
         *entry.or_insert(0)
     }
+
+    pub fn bid(&self) -> impl Iterator<Item = (&Price, &Size)> {
+        self.bid.iter()
+                .filter(|(_, &size)| size > 0)
+    }
+
+    pub fn ask(&self) -> impl Iterator<Item = (&Price, &Size)> {
+        self.ask.iter()
+                .filter(|(_, &size)| size > 0)
+    }
 }
 
 thread_local! {
@@ -99,19 +109,17 @@ impl fmt::Display for OrderBook {
         let display_limit = DISPLAY_LIMIT.with(|dl| dl.get());
 
         writeln!(f, "## ASK")?;
-        let ask: Vec<_> = self.ask.iter()
-                                  .filter(|(_, &size)| size > 0)
-                                  .take(display_limit)
-                                  .collect();
+        let ask: Vec<_> = self.ask()
+            .take(display_limit)
+            .collect();
         for (&price, &size) in ask.iter().rev() {
             writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;
         }
 
         write!(f, "\n\n")?;
-        for (&price, &size) in self.bid.iter()
-                                       .rev()
-                                       .filter(|(_, &size)| size > 0)
-                                       .take(display_limit)
+        for (&price, &size) in self.bid()
+                                   .filter(|(_, &size)| size > 0)
+                                   .take(display_limit)
         {
             writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;
         }

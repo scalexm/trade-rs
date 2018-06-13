@@ -1,5 +1,5 @@
-use trade_rs::*;
-use trade_rs::api::*;
+use trade::*;
+use trade::api::*;
 use tokio::executor::current_thread;
 use tokio::runtime;
 use futures::prelude::*;

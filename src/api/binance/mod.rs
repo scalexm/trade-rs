@@ -7,6 +7,22 @@ use hyper::StatusCode;
 
 pub use api::params::*;
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A binance key pair: api key + secret key.
+pub struct KeyPair {
+    api_key: String,
+    secret_key: String,
+}
+
+impl KeyPair {
+    pub fn new(api_key: String, secret_key: String) -> Self {
+        KeyPair {
+            api_key,
+            secret_key,
+        }
+    }
+}
+
 struct Keys {
     api_key: String,
     secret_key: PKey<Private>,

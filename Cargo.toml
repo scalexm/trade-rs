@@ -1,5 +1,5 @@
 [package]
-name = "trade-rs"
+name = "trade"
 version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
 
@@ -23,7 +23,3 @@ chrono = "^0.4"
 [dependencies.ws]
 version = "^0.7"
 features = ["ssl"]
-
-[lib]
-name = "trade_rs"
-path = "src/lib.rs"

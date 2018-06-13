@@ -6,15 +6,19 @@ use openssl::pkey::{PKey, Private};
 
 pub use api::params::*;
 
-pub struct WithPassPhrase {
-    key_pair: KeyPair,
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A GDAX key pair: api key + secret key, along with a pass phrase.
+pub struct KeyPair {
+    api_key: String,
+    secret_key: String,
     pass_phrase: String,
 }
 
-impl WithPassPhrase {
-    pub fn new(key_pair: KeyPair, pass_phrase: String) -> Self {
-        WithPassPhrase {
-            key_pair,
+impl KeyPair {
+    pub fn new(api_key: String, secret_key: String, pass_phrase: String) -> Self {
+        KeyPair {
+            api_key,
+            secret_key,
             pass_phrase,
         }
     }
@@ -32,19 +36,19 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(params: Params, with_pass_phrase: Option<WithPassPhrase>)
+    pub fn new(params: Params, with_pass_phrase: Option<KeyPair>)
         -> Result<Self, Error>
     {
         match with_pass_phrase {
-            Some(k) => {
-                let secret_key = PKey::hmac(k.key_pair.secret_key.as_bytes())?;
+            Some(pair) => {
+                let secret_key = PKey::hmac(pair.secret_key.as_bytes())?;
 
                 Ok(Client {
                     params,
                     keys: Some(Keys {
-                        api_key: k.key_pair.api_key,
+                        api_key: pair.api_key,
                         secret_key,
-                        pass_phrase: k.pass_phrase,
+                        pass_phrase: pair.pass_phrase,
                     })
                 })
             },

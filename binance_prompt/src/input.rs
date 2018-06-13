@@ -1,5 +1,5 @@
-use trade_rs::{Error, Tick, Side};
-use trade_rs::api::{Order, Cancel, TimeInForce};
+use trade::{Error, Tick, Side};
+use trade::api::{Order, Cancel, TimeInForce};
 use futures::sync::mpsc::UnboundedSender;
 use std::cell::{RefCell, Cell};
 use prompt::PushEvent;

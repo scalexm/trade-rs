@@ -1,12 +1,9 @@
-// `Timeout`, `Token`
-#![allow(deprecated)]
-
 use crate::*;
 use api::*;
-use serde_json;
-use ws::{self, util::{Timeout, Token}};
-use futures::sync::mpsc::*;
 use super::{Client, Params};
+use serde_json;
+use ws;
+use futures::sync::mpsc::{unbounded, UnboundedReceiver};
 use std::thread;
 use chrono::{Utc, TimeZone};
 
@@ -17,12 +14,11 @@ impl Client {
         thread::spawn(move || {
             info!("Initiating WebSocket connection at {}", params.ws_address);
             
-            if let Err(err) = ws::connect(params.ws_address.as_ref(), |out| Handler {
-                out,
-                snd: snd.clone(),
-                params: params.clone(),
-                timeout: None,
-                state: SubscriptionState::NotSubscribed,
+            if let Err(err) = ws::connect(params.ws_address.as_ref(), |out| {
+                wss::Handler::new(out, snd.clone(), HandlerImpl {
+                    params: params.clone(),
+                    state: SubscriptionState::NotSubscribed,
+                })
             })
             {
                 error!("WebSocket connection terminated with error: `{}`", err);
@@ -39,13 +35,8 @@ enum SubscriptionState {
     Subscribed,
 }
 
-struct Handler {
-    out: ws::Sender,
-    snd: UnboundedSender<Notification>,
+struct HandlerImpl {
     params: Params,
-
-    timeout: Option<Timeout>,
-
     state: SubscriptionState,
 }
 
@@ -82,17 +73,31 @@ struct GdaxError {
     reason: String,
 }
 
-impl Handler {
-    fn send(&mut self, notif: Notification) -> ws::Result<()> {
-        if let Err(..) = self.snd.unbounded_send(notif) {
-            // The corresponding receiver was dropped, this connection does not make sense
-            // anymore.
-            self.out.shutdown()?;
-        }
-        Ok(())
+impl HandlerImpl {
+    fn convert_gdax_update(&self, l: (&str, &str), side: Side, timestamp: u64)
+        -> Result<LimitUpdate, ConversionError>
+    {
+        Ok(
+            LimitUpdate {
+                side,
+                price: self.params.symbol.price_tick.convert_unticked(l.0)?,
+                size: self.params.symbol.size_tick.convert_unticked(l.1)?,
+                timestamp,
+            }
+        )
     }
 
-    fn process_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
+    fn convert_gdax_side(&self, side: &str) -> Result<Side, Error> {
+        let side = match side {
+            "buy" => Side::Bid,
+            "sell" => Side::Ask,
+            other => bail!("wrong side: `{}`", other),
+        };
+        Ok(side)
+    }
+
+    /// Parse a (should-be) JSON message sent by gdax.
+    fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
         let json: serde_json::Value = serde_json::from_str(json)?;
         let event = match json["type"].as_str() {
             Some(event) => event.to_string(),
@@ -106,27 +111,22 @@ impl Handler {
                 }
                 self.state = SubscriptionState::Subscribed;
                 None
-            }
+            },
+
             "snapshot" => {
                 let snapshot: BookSnapshot = serde_json::from_value(json)?;
                 let timestamp = timestamp_ms();
 
                 let bid = snapshot.bids
-                    .into_iter()
-                    .map(|(price, size)| Ok(LimitUpdate {
-                        side: Side::Bid,
-                        price: self.params.symbol.price_tick.convert_unticked(&price)?,
-                        size: self.params.symbol.size_tick.convert_unticked(&size)?,
-                        timestamp,
-                    }));
+                    .iter()
+                    .map(|(price, size)| {
+                        self.convert_gdax_update((price, size), Side::Bid, timestamp)
+                    });
                 let ask = snapshot.asks
-                    .into_iter()
-                    .map(|(price, size)| Ok(LimitUpdate {
-                        side: Side::Ask,
-                        price: self.params.symbol.price_tick.convert_unticked(&price)?,
-                        size: self.params.symbol.size_tick.convert_unticked(&size)?,
-                        timestamp,
-                    }));
+                    .iter()
+                    .map(|(price, size)| {
+                        self.convert_gdax_update((price, size), Side::Ask, timestamp)
+                    });
                 
                 Some(
                     Notification::LimitUpdates(
@@ -134,28 +134,24 @@ impl Handler {
                     )
                 )
             },
+
             "l2update" => {
                 let update: GdaxLimitUpdate = serde_json::from_value(json)?;
                 let timestamp = timestamp_ms();
 
                 let updates = update.changes
-                    .into_iter()
-                    .map(|(side, price, size)| Ok(LimitUpdate {
-                        side: match side.as_ref() {
-                            "buy" => Side::Bid,
-                            "sell" => Side::Ask,
-                            other => bail!("wrong side: `{}`", other),
-                        },
-                        price: self.params.symbol.price_tick.convert_unticked(&price)?,
-                        size: self.params.symbol.size_tick.convert_unticked(&size)?,
-                        timestamp,
-                    }));
+                    .iter()
+                    .map(|(side, price, size)| {
+                        let side = self.convert_gdax_side(side)?;
+                        Ok(self.convert_gdax_update((price, size), side, timestamp)?)
+                    });
                 Some(
                     Notification::LimitUpdates(
                         updates.collect::<Result<Vec<_>, Error>>()?
                     )
                 )
             },
+
             "match" => {
                 let trade: GdaxMatch = serde_json::from_value(json)?;
                 let time = Utc.datetime_from_str(
@@ -169,34 +165,25 @@ impl Handler {
                     Notification::Trade(Trade {
                         size: self.params.symbol.size_tick.convert_unticked(&trade.size)?,
                         price: self.params.symbol.price_tick.convert_unticked(&trade.price)?,
-                        maker_side: match trade.side.as_ref() {
-                            "buy" => Side::Bid,
-                            "sell" => Side::Ask,
-                            other => bail!("wrong side: `{}`", other),
-                        },
+                        maker_side: self.convert_gdax_side(&trade.side)?,
                         timestamp,
                     })
                 )
-            }
+            },
+
             "error" => {
                 let error: GdaxError = serde_json::from_value(json)?;
-                error!("{}: {}", error.message, error.reason);
-                None
+                bail!("{}: {}", error.message, error.reason);
             },
+
             _ => None,
         };
         Ok(notif)
     }
 }
 
-const PING: Token = Token(1);
-const EXPIRE: Token = Token(2);
-
-const PING_TIMEOUT: u64 = 10_000;
-const EXPIRE_TIMEOUT: u64 = 30_000;
-
-impl ws::Handler for Handler {
-    fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
+impl wss::HandlerImpl for HandlerImpl {
+    fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()> {
         let subscription = Subscription {
             type_: "subscribe".to_string(),
             product_ids: vec![self.params.symbol.name.clone()],
@@ -207,55 +194,14 @@ impl ws::Handler for Handler {
         };
         
         match serde_json::to_string(&subscription) {
-            Ok(value) => self.out.send(value)?,
+            Ok(value) => out.send(value),
             Err(err) => {
                 panic!("failed to serialize `Subscription`: `{}`", err);
             }
         }
-
-        self.out.timeout(PING_TIMEOUT, PING)?;
-        self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)
     }
 
-    fn on_shutdown(&mut self) {
-        info!("Client shutting down");
-    }
-
-    fn on_timeout(&mut self, event: Token) -> ws::Result<()> {
-        match event {
-            PING => {
-                self.out.ping(vec![])?;
-                self.out.timeout(PING_TIMEOUT, PING)
-            }
-            EXPIRE => self.out.close(ws::CloseCode::Away),
-            _ => Err(ws::Error::new(ws::ErrorKind::Internal, "invalid timeout token encountered")),
-        }
-    }
-
-    fn on_new_timeout(&mut self, event: Token, timeout: Timeout) -> ws::Result<()> {
-        if event == EXPIRE {
-            if let Some(t) = self.timeout.take() {
-                self.out.cancel(t)?;
-            }
-            self.timeout = Some(timeout)
-        }
-        Ok(())
-    }
-
-    fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
-        if let ws::Message::Text(json) = msg {
-            match self.process_message(&json) {
-                Ok(Some(notif)) => {
-                    self.send(notif)?;
-                },
-
-                Ok(None) => (),
-
-                Err(err) => {
-                    error!("Message parsing encountered error: `{}`", err)
-                }
-            }
-        }
-        Ok(())
+    fn on_message(&mut self, text: String) -> Result<Option<Notification>, Error> {
+        self.parse_message(&text)
     }
 }

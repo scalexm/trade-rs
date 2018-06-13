@@ -1,12 +1,10 @@
-// `Timeout`, `Token`
-#![allow(deprecated)]
-
 use crate::*;
 use api::*;
 use std::{mem, thread};
-use ws::{self, util::{Timeout, Token}};
+use ws;
 use serde_json;
-use futures::{prelude::*, sync::mpsc::*};
+use futures::{prelude::*, sync::mpsc::{unbounded, UnboundedReceiver}};
+use std::sync::mpsc;
 use super::{Client, RestError, Params};
 
 impl Client {
@@ -25,13 +23,12 @@ impl Client {
             }
             info!("Initiating WebSocket connection at {}", address);
             
-            if let Err(err) = ws::connect(address.as_ref(), |out| Handler {
-                out,
-                snd: snd.clone(),
-                params: params.clone(),
-                timeout: None,
-                book_snapshot_state: BookSnapshotState::None,
-                previous_u: None,
+            if let Err(err) = ws::connect(address.as_ref(), |out| {
+                wss::Handler::new(out, snd.clone(), HandlerImpl{
+                    params: params.clone(),
+                    book_snapshot_state: BookSnapshotState::None,
+                    previous_u: None,
+                })
             })
             {
                 error!("WebSocket connection terminated with error: `{}`", err);
@@ -43,38 +40,36 @@ impl Client {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-/// Internal representation which keep binance `u` indicator.
+/// Internal representation which keeps binance `u` indicator.
 struct LimitUpdates {
     u: u64,
     updates: Vec<LimitUpdate>,
 }
 
+type BookReceiver = mpsc::Receiver<Result<BinanceBookSnapshot, Error>>;
+
+#[derive(Debug)]
+struct BookWaitingState {
+    rcv: BookReceiver,
+    events: Vec<LimitUpdates>,
+}
+
 #[derive(Debug)]
 /// State of the book snapshot request:
 /// * `None`: the request has not been made yet
-/// * `Waiting(rcv, passed_events)`: the request has started, in the meantime we have a `Receiver`
+/// * `Waiting(state)`: the request has started, in the meantime we have a `Receiver`
 ///   which will receive the snapshot, and a vector of past events which may need to be notified
-///   to the `BinanceClient` consumer one the request is complete
+///   to the `BinanceClient` consumer once the request is complete
 /// * `Ok`: the request was completed already
 enum BookSnapshotState {
     None,
-    Waiting(
-        Receiver<Result<BinanceBookSnapshot, Error>>,
-        Vec<LimitUpdates>
-    ),
+    Waiting(BookWaitingState),
     Ok,
 }
 
 /// An object handling a WebSocket API connection.
-struct Handler {
-    out: ws::Sender,
-    snd: UnboundedSender<Notification>,
+struct HandlerImpl {
     params: Params,
-
-    /// We keep a reference to the `EXPIRE` timeout so that we can cancel it when we receive
-    /// something from the server.
-    timeout: Option<Timeout>,
-
     book_snapshot_state: BookSnapshotState,
 
     /// We keep track of the last `u` indicator sent by binance, this is used for checking
@@ -86,17 +81,10 @@ struct Handler {
 #[allow(non_snake_case)]
 /// A JSON representation of a trade, sent by binance.
 struct BinanceTrade {
-    e: String,
-    E: u64,
-    s: String,
-    t: usize,
     p: String,
     q: String,
-    b: usize,
-    a: usize,
     T: u64,
     m: bool,
-    M: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -104,16 +92,13 @@ struct BinanceTrade {
 struct BinanceLimitUpdate {
     price: String,
     size: String,
-    _ignore: Vec<i32>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 /// A JSON representation of an orderbook update, sent by binance.
 struct BinanceDepthUpdate {
-    e: String,
     E: u64,
-    s: String,
     U: u64,
     u: u64,
     b: Vec<BinanceLimitUpdate>,
@@ -133,46 +118,19 @@ struct BinanceBookSnapshot {
 #[allow(non_snake_case)]
 /// A JSON representation of an order update, sent by binance.
 struct BinanceExecutionReport {
-    e: String,
-    E: u64,
-    s: String,
     c: String,
     S: String,
-    o: String,
-    f: String,
     q: String,
     p: String,
-    P: String,
-    F: String,
-    g: i64,
-    C: String,
     x: String,
-    X: String,
-    r: String,
-    i: i64,
     l: String,
     z: String,
     L: String,
     n: String,
-   // N: String,
     T: u64,
-    t: i64,
-    I: i64,
-    w: bool,
-    m: bool,
-    M: bool
 }
 
-impl Handler {
-    fn send(&mut self, notif: Notification) -> ws::Result<()> {
-        if let Err(..) = self.snd.unbounded_send(notif) {
-            // The corresponding receiver was dropped, this connection does not make sense
-            // anymore.
-            self.out.shutdown()?;
-        }
-        Ok(())
-    }
-
+impl HandlerImpl {
     /// Utility function for converting a `BinanceLimitUpdate` into a `LimitUpdate` (with
     /// conversion in ticks and so on).
     fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side, timestamp: u64)
@@ -188,8 +146,8 @@ impl Handler {
         )
     }
 
-    /// Process a (should-be) JSON message sent by binance.
-    fn process_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
+    /// Parse a (should-be) JSON message sent by binance.
+    fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
         let json: serde_json::Value = serde_json::from_str(json)?;
         let event = match json["e"].as_str() {
             Some(event) => event.to_string(),
@@ -282,228 +240,166 @@ impl Handler {
     fn process_book_snapshot(
         &self,
         snapshot: Result<BinanceBookSnapshot, Error>,
-        passed_events: Vec<LimitUpdates>
-    ) -> Result<Vec<Notification>, Error>
+        buffered_events: Vec<LimitUpdates>
+    ) -> Result<Notification, Error>
     {
         let snapshot = snapshot?;
         let time = timestamp_ms();
+
         let bid = snapshot.bids
                           .iter()
                           .map(|l| self.convert_binance_update(l, Side::Bid, time));
+
         let ask = snapshot.asks
                           .iter()
                           .map(|l| self.convert_binance_update(l, Side::Ask, time));
 
-        let notifs = Some(
-            Notification::LimitUpdates(
-                bid.chain(ask).collect::<Result<Vec<_>, ConversionError>>()?
-            )
-        ).into_iter().chain(
-            // Drop all events prior to `snapshot.lastUpdateId`.
-            passed_events.into_iter()
-                         .filter(|update| update.u > snapshot.lastUpdateId)
-                         .map(|update| Notification::LimitUpdates(update.updates))
+        let buffered = buffered_events
+            .into_iter()
+            .filter(|update| update.u > snapshot.lastUpdateId)
+            .flat_map(|update| update.updates)
+            .map(|update| Ok(update));
+
+        let notif = Notification::LimitUpdates(
+            bid.chain(ask).chain(buffered).collect::<Result<Vec<_>, ConversionError>>()?
         );
 
-        Ok(notifs.collect())
+        Ok(notif)
+    }
+
+    fn maybe_recv_book(&mut self, state: BookWaitingState)
+        -> Option<Notification>
+    {
+        match state.rcv.try_recv() {
+            Ok(book) => {
+                info!("Received LOB snapshot");
+                match self.process_book_snapshot(book, state.events) {
+                    Ok(notif) => {
+                        self.book_snapshot_state = BookSnapshotState::Ok;
+                        Some(notif)
+                    },
+                    Err(err) => {
+                        // We cannot continue without the book.
+                        panic!(
+                            "LOB processing encountered error: `{}`",
+                            err
+                        );
+                    }
+                }
+            },
+
+            // The snapshot request has not completed yet, we wait some more.
+            Err(mpsc::TryRecvError::Empty) => {
+                self.book_snapshot_state = BookSnapshotState::Waiting(state);
+                None
+            },
+
+            // The only `Sender` has somehow disconnected, we won't receive
+            // the book hence we cannot continue.
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("LOB sender has disconnected");
+            }
+        }
+    }
+
+    fn request_book_snapshot(&mut self, updates: Vec<LimitUpdate>) {
+        let (snd, rcv) = mpsc::channel();
+
+        self.book_snapshot_state = BookSnapshotState::Waiting(
+            BookWaitingState {
+                rcv,
+
+                // Buffer this first event we've just received.
+                events: vec![LimitUpdates {
+                    u: self.previous_u.unwrap(),
+                    updates,
+                }]
+            }
+        );
+
+        let address = format!(
+            "{}/api/v1/depth?symbol={}&limit=1000",
+            self.params.http_address,
+            self.params.symbol.name.to_uppercase()
+        ).parse().expect("invalid address");
+
+        info!("Initiating LOB request at `{}`", address);
+
+        thread::spawn(move || {
+            let https = match hyper_tls::HttpsConnector::new(2) {
+                Ok(https) => https,
+                Err(err) => {
+                    let _ = snd.send(Err(err).map_err(From::from));
+                    return;
+                }
+            };
+
+            let client = hyper::Client::builder().build::<_, hyper::Body>(https);
+            let fut = client.get(address).and_then(|res| {
+                let status = res.status();
+                res.into_body().concat2().and_then(move |body| {
+                    Ok((status, body))
+                })
+            }).map_err(From::from).and_then(move |(status, body)| {
+                if status != hyper::StatusCode::OK {
+                    let binance_error = serde_json::from_slice(&body);
+                    Err(
+                        RestError::from_binance_error(
+                            status,
+                            binance_error.ok()
+                        )
+                    )?;
+                }
+
+                Ok(serde_json::from_slice(&body)?)
+            }).then(move |res| {
+                let _ = snd.send(res);
+                Ok(())
+            });
+
+            use tokio::runtime;
+            let mut runtime = runtime::current_thread::Runtime::new().unwrap();
+            runtime.spawn(fut);
+            runtime.run().unwrap();
+        });
     }
 }
 
-const PING: Token = Token(1);
-const EXPIRE: Token = Token(2);
-const BOOK_SNAPSHOT: Token = Token(3);
-
-const PING_TIMEOUT: u64 = 10_000;
-const EXPIRE_TIMEOUT: u64 = 30_000;
-const BOOK_SNAPSHOT_TIMEOUT: u64 = 1_000;
-
-impl ws::Handler for Handler {
-    fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
-        self.out.ping(vec![])?;
-        self.out.timeout(PING_TIMEOUT, PING)?;
-        self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)
+impl wss::HandlerImpl for HandlerImpl {
+    fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()> {
+        out.ping(vec![])
     }
 
-    fn on_shutdown(&mut self) {
-        info!("Client shutting down");
-    }
-
-    fn on_timeout(&mut self, event: Token) -> ws::Result<()> {
-        match event {
-            PING => {
-                self.out.ping(vec![])?;
-                self.out.timeout(PING_TIMEOUT, PING)
-            }
-            EXPIRE => self.out.close(ws::CloseCode::Away),
-            BOOK_SNAPSHOT => {
-                match mem::replace(&mut self.book_snapshot_state, BookSnapshotState::None) {
-                    // The timout is enabled only when the we are in the `Waiting` state.
-                    BookSnapshotState::None |
-                    BookSnapshotState::Ok => panic!(
-                        "book snapshot timeout not supposed to happen"
-                    ),
-
-                    BookSnapshotState::Waiting(mut rcv, events) => {
-                        match rcv.poll().unwrap() {
-                            Async::Ready(Some(book)) => {
-                                info!("Received LOB snapshot");
-                                match self.process_book_snapshot(book, events) {
-                                    Ok(notifs) => {
-                                        for notif in notifs {
-                                            self.send(notif)?
-                                        }
-                                        self.book_snapshot_state = BookSnapshotState::Ok;
-                                    },
-                                    Err(err) => {
-                                        error!(
-                                            "LOB processing encountered error: `{}`",
-                                            err
-                                        );
-                                    
-                                        // We cannot continue without the book, we shutdown.
-                                        self.out.shutdown()?;
-                                    }
-                                }
-                            },
-
-                            // The snapshot request has not completed yet, we wait some more.
-                            Async::NotReady => {
-                                self.book_snapshot_state = BookSnapshotState::Waiting(
-                                    rcv,
-                                    events
-                                );
-                                self.out.timeout(BOOK_SNAPSHOT_TIMEOUT, BOOK_SNAPSHOT)?
-                            },
-
-                            // The only `Sender` has somehow disconnected, we won't receive
-                            // the book hence we cannot continue.
-                            Async::Ready(None) => {
-                                error!("LOB sender has disconnected");
-                                self.out.shutdown()?;
-                            }
-                        }
-                    },
-                };
-                Ok(())
-            }
-            _ => Err(ws::Error::new(ws::ErrorKind::Internal, "invalid timeout token encountered")),
-        }
-    }
-
-    fn on_new_timeout(&mut self, event: Token, timeout: Timeout) -> ws::Result<()> {
-        if event == EXPIRE {
-            if let Some(t) = self.timeout.take() {
-                self.out.cancel(t)?;
-            }
-            self.timeout = Some(timeout)
-        }
-        Ok(())
-    }
-
-    fn on_frame(&mut self, frame: ws::Frame) -> ws::Result<Option<ws::Frame>> {
-        self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)?;
-        Ok(Some(frame))
-    }
-
-    fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
-        if let ws::Message::Text(json) = msg {
-            match self.process_message(&json) {
-                // Depth update notif: behavior depends on the status of the order book snapshot.
-                Ok(Some(Notification::LimitUpdates(updates))) => match self.book_snapshot_state {
+    fn on_message(&mut self, text: String) -> Result<Option<Notification>, Error> {
+        match self.parse_message(&text) {
+            // Depth update notif: behavior depends on the status of the order book snapshot.
+            Ok(Some(Notification::LimitUpdates(updates))) => {
+                match mem::replace(&mut self.book_snapshot_state, BookSnapshotState::Ok) {
                     // Very first limit update event received: time to ask for the book snapshot.
                     BookSnapshotState::None => {
-                        #[allow(unused_mut)] // FIXME: fake warning
-                        let (mut snd, rcv) = channel(1);
-
-                        self.book_snapshot_state = BookSnapshotState::Waiting(
-                            rcv,
-
-                            // Buffer this first event we've just received.
-                            vec![LimitUpdates {
-                                u: self.previous_u.unwrap(),
-                                updates,
-                            }]
-                        );
-
-                        let address = format!(
-                            "{}/api/v1/depth?symbol={}&limit=1000",
-                            self.params.http_address,
-                            self.params.symbol.name.to_uppercase()
-                        ).parse().expect("invalid address");
-
-                        info!("Initiating LOB request at `{}`", address);
-
-                        thread::spawn(move || {
-                            let https = match hyper_tls::HttpsConnector::new(2) {
-                                Ok(https) => https,
-                                Err(err) => {
-                                    let _ = snd.try_send(Err(err).map_err(From::from));
-                                    return;
-                                }
-                            };
-
-                            let client = hyper::Client::builder().build::<_, hyper::Body>(https);
-                            let fut = client.get(address).and_then(|res| {
-                                let status = res.status();
-                                res.into_body().concat2().and_then(move |body| {
-                                    Ok((status, body))
-                                })
-                            }).map_err(From::from).and_then(move |(status, body)| {
-                                if status != hyper::StatusCode::OK {
-                                    let binance_error = serde_json::from_slice(&body);
-                                    Err(
-                                        RestError::from_binance_error(
-                                            status,
-                                            binance_error.ok()
-                                        )
-                                    )?;
-                                }
-
-                                Ok(serde_json::from_slice(&body)?)
-                            }).then(move |res| {
-                                let _ = snd.try_send(res);
-                                Ok(())
-                            });
-
-                            use tokio::runtime;
-                            let mut runtime = runtime::current_thread::Runtime::new().unwrap();
-                            runtime.spawn(fut);
-                            runtime.run().unwrap();
-                        });
-
-                        // We are in `Waiting` state: enable the timeout.
-                        self.out.timeout(BOOK_SNAPSHOT_TIMEOUT, BOOK_SNAPSHOT)?
+                        self.request_book_snapshot(updates);
+                        Ok(None)
                     },
 
                     // Still waiting: buffer incoming events.
-                    BookSnapshotState::Waiting(_, ref mut events) => {
-                        events.push(LimitUpdates {
+                    BookSnapshotState::Waiting(mut state) => {
+                        state.events.push(LimitUpdates {
                             u: self.previous_u.unwrap(),
                             updates,
-                        })
+                        });
+                        Ok(self.maybe_recv_book(state))
                     },
 
                     // We already received the book snapshot and notified the final consumer,
                     // we can now notify further notifications to them.
                     BookSnapshotState::Ok => {
-                        self.send(Notification::LimitUpdates(updates))?;
+                        Ok(Some(Notification::LimitUpdates(updates)))
                     },
-                },
-
-
-                // Other notif: just forward to the consumer.
-                Ok(Some(notif)) => {
-                    self.send(notif)?;
-                },
-
-                // Seems like the message was not conforming.
-                Ok(None) => (),
-
-                Err(err) => {
-                    error!("Message parsing encountered error: `{}`", err)
                 }
-            };
+            },
+
+            // Other notif: just forward to the consumer.
+            other => other,
         }
-        Ok(())
     }
 }

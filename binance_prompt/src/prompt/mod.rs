@@ -1,5 +1,5 @@
-use trade_rs::order_book::OrderBook;
-use trade_rs::api::{Order, ApiClient};
+use trade::order_book::OrderBook;
+use trade::api::{Order, ApiClient};
 use std::collections::HashMap;
 use futures::sync::mpsc::{unbounded, UnboundedSender};
 use std::thread;

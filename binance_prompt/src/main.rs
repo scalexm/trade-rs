@@ -1,6 +1,6 @@
 #![feature(nll)]
 
-extern crate trade_rs;
+extern crate trade;
 extern crate futures;
 extern crate tokio;
 extern crate cursive;
@@ -12,8 +12,8 @@ mod prompt;
 mod input;
 
 use std::fs::File;
-use trade_rs::{order_book, Tick};
-use trade_rs::api::binance;
+use trade::{order_book, Tick};
+use trade::api::binance;
 
 use cursive::Cursive;
 use cursive::theme::Theme;
@@ -80,5 +80,3 @@ fn main() {
     draw_input_line(&mut siv, price_tick, size_tick);
     siv.run();
 }
-
-
