@@ -82,6 +82,11 @@ impl<T: HandlerImpl> ws::Handler for Handler<T> {
         Ok(())
     }
 
+    fn on_frame(&mut self, frame: ws::Frame) -> ws::Result<Option<ws::Frame>> {
+        self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)?;
+        Ok(Some(frame))
+    }
+
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(text) = msg {
             match self.inner.on_message(text) {

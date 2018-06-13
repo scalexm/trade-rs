@@ -23,7 +23,7 @@ impl Client {
                 address += &format!("/{}", listen_key);
             }
             info!("Initiating WebSocket connection at {}", address);
-            
+
             if let Err(err) = ws::connect(address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), HandlerImpl{
                     params: params.clone(),
@@ -33,9 +33,9 @@ impl Client {
             })
             {
                 error!("WebSocket connection terminated with error: `{}`", err);
-            }   
+            }
         });
-        
+
         rcv
     }
 }
@@ -94,6 +94,7 @@ struct BinanceLimitUpdate<'a> {
     price: Cow<'a, str>,
     #[serde(borrow)]
     size: Cow<'a, str>,
+    _ignore: Vec<i32>,
 }
 
 impl<'a> BinanceLimitUpdate<'a> {
@@ -101,6 +102,7 @@ impl<'a> BinanceLimitUpdate<'a> {
         BinanceLimitUpdate {
             price: Cow::Owned(self.price.into_owned()),
             size: Cow::Owned(self.size.into_owned()),
+            _ignore: vec![],
         }
     }
 }
