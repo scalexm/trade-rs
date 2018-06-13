@@ -17,6 +17,7 @@ extern crate num;
 extern crate openssl;
 extern crate hex;
 extern crate chrono;
+extern crate base64;
 
 pub mod matching_engine;
 pub mod api;
@@ -44,6 +45,7 @@ pub enum Side {
     Ask,
 }
 
+/// Return UTC timestamp in milliseconds.
 pub fn timestamp_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)

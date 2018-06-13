@@ -14,6 +14,29 @@ pub enum TimeInForce {
     FillOrKilll,
 }
 
+trait AsStr {
+    fn as_str(&self) -> &'static str;
+}
+
+impl AsStr for Side {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Side::Ask => "SELL",
+            Side::Bid => "BUY",
+        }
+    }
+}
+
+impl AsStr for TimeInForce {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TimeInForce::GoodTilCanceled => "GTC",
+            TimeInForce::FillOrKilll => "FOK",
+            TimeInForce::ImmediateOrCancel => "IOC",
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An order to be sent through the API.
 pub struct Order {

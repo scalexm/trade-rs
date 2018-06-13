@@ -15,6 +15,7 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
+    /// Return a new key pair.
     pub fn new(api_key: String, secret_key: String) -> Self {
         KeyPair {
             api_key,

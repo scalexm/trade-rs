@@ -41,6 +41,7 @@ struct HandlerImpl {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
+/// Subscription parameters to be sent to GDAX.
 struct Subscription<'a> {
     #[serde(rename = "type")]
     type_: &'a str,
@@ -49,6 +50,7 @@ struct Subscription<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+/// A JSON representation of an order book snapshot, sent by GDAX.
 struct BookSnapshot<'a> {
     #[serde(borrow)]
     bids: Vec<(&'a str, &'a str)>,
@@ -57,12 +59,14 @@ struct BookSnapshot<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+/// A JSON representation of an order book update, sent by GDAX.
 struct GdaxLimitUpdate<'a> {
     #[serde(borrow)]
     changes: Vec<(&'a str, &'a str, &'a str)>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+/// A JSON representation of a trade, sent by GDAX.
 struct GdaxMatch<'a> {
     time: &'a str,
     size: &'a str,

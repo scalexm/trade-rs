@@ -168,7 +168,7 @@ impl Executor for BookEntries {
         }
     }
 
-    /// Compute the total size of a given limit.
+    /// Compute the total size at a given limit.
     fn size_at_limit(&self, limit: &PriceLimit) -> Size {
         match limit.link {
             Some(ref link) => {

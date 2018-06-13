@@ -36,29 +36,6 @@ impl QueryString {
     }
 }
 
-trait AsStr {
-    fn as_str(&self) -> &'static str;
-}
-
-impl AsStr for Side {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Side::Ask => "SELL",
-            Side::Bid => "BUY",
-        }
-    }
-}
-
-impl AsStr for TimeInForce {
-    fn as_str(&self) -> &'static str {
-        match self {
-            TimeInForce::GoodTilCanceled => "GTC",
-            TimeInForce::FillOrKilll => "FOK",
-            TimeInForce::ImmediateOrCancel => "IOC",
-        }
-    }
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 struct BinanceOrderAck<'a> {

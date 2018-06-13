@@ -58,11 +58,16 @@ impl OrderBook {
         *entry.or_insert(0)
     }
 
+    /// Iterator over the non-empty limits at bid, sorted by
+    /// descending key.
     pub fn bid(&self) -> impl Iterator<Item = (&Price, &Size)> {
         self.bid.iter()
+                .rev()
                 .filter(|(_, &size)| size > 0)
     }
 
+    /// Iterator over the non-empty limits at ask, sorted by
+    /// ascending key.
     pub fn ask(&self) -> impl Iterator<Item = (&Price, &Size)> {
         self.ask.iter()
                 .filter(|(_, &size)| size > 0)
@@ -90,6 +95,7 @@ pub fn display_size_tick(maybe_tick: Option<Tick>) {
     DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
 }
 
+/// Convert a ticked `Price` in an unticked value with the current thread local price tick.
 pub fn displayable_price(ticked: Price) -> String {
     match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.convert_ticked(ticked).unwrap(),
@@ -97,6 +103,7 @@ pub fn displayable_price(ticked: Price) -> String {
     }
 }
 
+/// Convert a ticked `Size` in an unticked value with the current thread local size tick.
 pub fn displayable_size(ticked: Size) -> String {
     match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.convert_ticked(ticked).unwrap(),
