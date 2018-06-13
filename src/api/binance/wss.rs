@@ -6,6 +6,7 @@ use serde_json;
 use futures::{prelude::*, sync::mpsc::{unbounded, UnboundedReceiver}};
 use std::sync::mpsc;
 use super::{Client, RestError, Params};
+use std::borrow::Cow;
 
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
@@ -46,7 +47,7 @@ struct LimitUpdates {
     updates: Vec<LimitUpdate>,
 }
 
-type BookReceiver = mpsc::Receiver<Result<BinanceBookSnapshot, Error>>;
+type BookReceiver = mpsc::Receiver<Result<BinanceBookSnapshot<'static>, Error>>;
 
 #[derive(Debug)]
 struct BookWaitingState {
@@ -67,7 +68,6 @@ enum BookSnapshotState {
     Ok,
 }
 
-/// An object handling a WebSocket API connection.
 struct HandlerImpl {
     params: Params,
     book_snapshot_state: BookSnapshotState,
@@ -77,57 +77,87 @@ struct HandlerImpl {
     previous_u: Option<u64>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 /// A JSON representation of a trade, sent by binance.
-struct BinanceTrade {
-    p: String,
-    q: String,
+struct BinanceTrade<'a> {
+    p: &'a str,
+    q: &'a str,
     T: u64,
     m: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 /// A JSON representation of a limit update, embedded into other binance events.
-struct BinanceLimitUpdate {
-    price: String,
-    size: String,
+struct BinanceLimitUpdate<'a> {
+    #[serde(borrow)]
+    price: Cow<'a, str>,
+    #[serde(borrow)]
+    size: Cow<'a, str>,
+}
+
+impl<'a> BinanceLimitUpdate<'a> {
+    pub fn owned(self) -> BinanceLimitUpdate<'static> {
+        BinanceLimitUpdate {
+            price: Cow::Owned(self.price.into_owned()),
+            size: Cow::Owned(self.size.into_owned()),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 /// A JSON representation of an orderbook update, sent by binance.
-struct BinanceDepthUpdate {
+struct BinanceDepthUpdate<'a> {
     E: u64,
     U: u64,
     u: u64,
-    b: Vec<BinanceLimitUpdate>,
-    a: Vec<BinanceLimitUpdate>,
+    #[serde(borrow)]
+    b: Vec<BinanceLimitUpdate<'a>>,
+    #[serde(borrow)]
+    a: Vec<BinanceLimitUpdate<'a>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 /// A JSON representation of an orderbook snapshot, sent by binance.
-struct BinanceBookSnapshot {
+struct BinanceBookSnapshot<'a> {
     lastUpdateId: u64,
-    bids: Vec<BinanceLimitUpdate>,
-    asks: Vec<BinanceLimitUpdate>,
+    #[serde(borrow)]
+    bids: Vec<BinanceLimitUpdate<'a>>,
+    #[serde(borrow)]
+    asks: Vec<BinanceLimitUpdate<'a>>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+impl<'a> BinanceBookSnapshot<'a> {
+    pub fn owned(self) -> BinanceBookSnapshot<'static> {
+        BinanceBookSnapshot {
+            asks: self.asks.into_iter().map(|s| s.owned()).collect(),
+            bids: self.bids.into_iter().map(|s| s.owned()).collect(),
+            ..self
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 /// A JSON representation of an order update, sent by binance.
-struct BinanceExecutionReport {
-    c: String,
-    S: String,
-    q: String,
-    p: String,
-    x: String,
-    l: String,
-    z: String,
-    L: String,
-    n: String,
+struct BinanceExecutionReport<'a> {
+    c: &'a str,
+    S: &'a str,
+    q: &'a str,
+    p: &'a str,
+    x: &'a str,
+    l: &'a str,
+    z: &'a str,
+    L: &'a str,
+    n: &'a str,
     T: u64,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct EventType<'a> {
+    e: &'a str,
 }
 
 impl HandlerImpl {
@@ -148,27 +178,23 @@ impl HandlerImpl {
 
     /// Parse a (should-be) JSON message sent by binance.
     fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
-        let json: serde_json::Value = serde_json::from_str(json)?;
-        let event = match json["e"].as_str() {
-            Some(event) => event.to_string(),
-            None => return Ok(None),
-        };
+        let event_type: EventType = serde_json::from_str(json)?;
 
-        let notif = match event.as_ref() {
+        let notif = match event_type.e {
             "trade" => {
-                let trade: BinanceTrade = serde_json::from_value(json)?;
+                let trade: BinanceTrade = serde_json::from_str(json)?;
                 Some(
                     Notification::Trade(Trade {
-                        size: self.params.symbol.size_tick.convert_unticked(&trade.q)?,
+                        size: self.params.symbol.size_tick.convert_unticked(trade.q)?,
                         timestamp: trade.T,
-                        price: self.params.symbol.price_tick.convert_unticked(&trade.p)?,
+                        price: self.params.symbol.price_tick.convert_unticked(trade.p)?,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
                     })
                 )
             },
 
             "depthUpdate" => {
-                let depth_update: BinanceDepthUpdate = serde_json::from_value(json)?;
+                let depth_update: BinanceDepthUpdate = serde_json::from_str(json)?;
                 let time = depth_update.E;
 
                 // The order is consistent if the previous `u + 1` is equal to current `U`.
@@ -195,35 +221,35 @@ impl HandlerImpl {
             },
 
             "executionReport" => {
-                let report: BinanceExecutionReport = serde_json::from_value(json)?;
+                let report: BinanceExecutionReport = serde_json::from_str(json)?;
 
                 match report.x.as_ref() {
                     "TRADE" => Some(
                         Notification::OrderUpdate(OrderUpdate {
-                            order_id: report.c,
+                            order_id: report.c.to_owned(),
 
                             consumed_size: self.params.symbol.size_tick
-                                .convert_unticked(&report.l)?,
+                                .convert_unticked(report.l)?,
 
                             remaining_size:
                                 self.params.symbol.size_tick
-                                    .convert_unticked(&report.q)?
+                                    .convert_unticked(report.q)?
                                 -
                                 self.params.symbol.size_tick
-                                    .convert_unticked(&report.z)?,
+                                    .convert_unticked(report.z)?,
 
                             consumed_price: self.params.symbol.price_tick
-                                .convert_unticked(&report.L)?,
+                                .convert_unticked(report.L)?,
 
                             commission: self.params.symbol.commission_tick
-                                .convert_unticked(&report.n)?,
+                                .convert_unticked(report.n)?,
 
                             timestamp: report.T,
                         })
                     ),
 
                     "EXPIRED" => Some(
-                        Notification::OrderExpired(report.c)
+                        Notification::OrderExpired(report.c.to_owned())
                     ),
 
                     // "NEW", "CANCELED" and "REJECTED" should already be handled by the
@@ -351,7 +377,8 @@ impl HandlerImpl {
                     )?;
                 }
 
-                Ok(serde_json::from_slice(&body)?)
+                let snapshot: BinanceBookSnapshot = serde_json::from_slice(&body)?;
+                Ok(snapshot.owned())
             }).then(move |res| {
                 let _ = snd.send(res);
                 Ok(())

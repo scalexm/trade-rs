@@ -45,10 +45,10 @@ pub struct Client {
     keys: Option<Keys>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-struct BinanceRestError {
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct BinanceRestError<'a> {
     code: i32,
-    msg: String,
+    msg: &'a str,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
@@ -65,13 +65,13 @@ pub struct RestError {
 }
 
 impl RestError {
-    fn from_binance_error(status: StatusCode, binance_error: Option<BinanceRestError>)
+    fn from_binance_error<'a>(status: StatusCode, binance_error: Option<BinanceRestError<'a>>)
         -> Self
     {
         RestError {
             category: RestErrorCategory::from_status_code(status),
             error_code: binance_error.as_ref().map(|error| error.code),
-            error_msg: binance_error.map(|error| error.msg),
+            error_msg: binance_error.map(|error| error.msg.to_owned()),
         }
     }
 }

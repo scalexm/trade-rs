@@ -41,36 +41,45 @@ struct HandlerImpl {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
-struct Subscription {
+struct Subscription<'a> {
     #[serde(rename = "type")]
-    type_: String,
-    product_ids: Vec<String>,
-    channels: Vec<String>,
+    type_: &'a str,
+    product_ids: &'a [&'a str],
+    channels: Vec<&'a str>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-struct BookSnapshot {
-    bids: Vec<(String, String)>,
-    asks: Vec<(String, String)>,
+struct BookSnapshot<'a> {
+    #[serde(borrow)]
+    bids: Vec<(&'a str, &'a str)>,
+    #[serde(borrow)]
+    asks: Vec<(&'a str, &'a str)>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-struct GdaxLimitUpdate {
-    changes: Vec<(String, String, String)>,
+struct GdaxLimitUpdate<'a> {
+    #[serde(borrow)]
+    changes: Vec<(&'a str, &'a str, &'a str)>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-struct GdaxMatch {
-    time: String,
-    size: String,
-    price: String,
-    side: String,
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct GdaxMatch<'a> {
+    time: &'a str,
+    size: &'a str,
+    price: &'a str,
+    side: &'a str,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-struct GdaxError {
-    message: String,
-    reason: String,
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct GdaxError<'a> {
+    message: &'a str,
+    reason: &'a str,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct EventType<'a> {
+    #[serde(rename = "type")]
+    type_: &'a str,
 }
 
 impl HandlerImpl {
@@ -98,13 +107,9 @@ impl HandlerImpl {
 
     /// Parse a (should-be) JSON message sent by gdax.
     fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
-        let json: serde_json::Value = serde_json::from_str(json)?;
-        let event = match json["type"].as_str() {
-            Some(event) => event.to_string(),
-            None => return Ok(None),
-        };
+        let event_type: EventType = serde_json::from_str(json)?;
 
-        let notif = match event.as_ref() {
+        let notif = match event_type.type_.as_ref() {
             "subscribe" => {
                 if self.state != SubscriptionState::NotSubscribed {
                     error!("received `subscribe` event while already subscribed");
@@ -114,16 +119,16 @@ impl HandlerImpl {
             },
 
             "snapshot" => {
-                let snapshot: BookSnapshot = serde_json::from_value(json)?;
+                let snapshot: BookSnapshot = serde_json::from_str(json)?;
                 let timestamp = timestamp_ms();
 
                 let bid = snapshot.bids
-                    .iter()
+                    .into_iter()
                     .map(|(price, size)| {
                         self.convert_gdax_update((price, size), Side::Bid, timestamp)
                     });
                 let ask = snapshot.asks
-                    .iter()
+                    .into_iter()
                     .map(|(price, size)| {
                         self.convert_gdax_update((price, size), Side::Ask, timestamp)
                     });
@@ -136,11 +141,11 @@ impl HandlerImpl {
             },
 
             "l2update" => {
-                let update: GdaxLimitUpdate = serde_json::from_value(json)?;
+                let update: GdaxLimitUpdate = serde_json::from_str(json)?;
                 let timestamp = timestamp_ms();
 
                 let updates = update.changes
-                    .iter()
+                    .into_iter()
                     .map(|(side, price, size)| {
                         let side = self.convert_gdax_side(side)?;
                         Ok(self.convert_gdax_update((price, size), side, timestamp)?)
@@ -153,9 +158,9 @@ impl HandlerImpl {
             },
 
             "match" => {
-                let trade: GdaxMatch = serde_json::from_value(json)?;
+                let trade: GdaxMatch = serde_json::from_str(json)?;
                 let time = Utc.datetime_from_str(
-                    &trade.time,
+                    trade.time,
                     "%FT%T.%fZ"
                 )?;
                 let timestamp = (time.timestamp() as u64) * 1000
@@ -163,16 +168,16 @@ impl HandlerImpl {
 
                 Some(
                     Notification::Trade(Trade {
-                        size: self.params.symbol.size_tick.convert_unticked(&trade.size)?,
-                        price: self.params.symbol.price_tick.convert_unticked(&trade.price)?,
-                        maker_side: self.convert_gdax_side(&trade.side)?,
+                        size: self.params.symbol.size_tick.convert_unticked(trade.size)?,
+                        price: self.params.symbol.price_tick.convert_unticked(trade.price)?,
+                        maker_side: self.convert_gdax_side(trade.side)?,
                         timestamp,
                     })
                 )
             },
 
             "error" => {
-                let error: GdaxError = serde_json::from_value(json)?;
+                let error: GdaxError = serde_json::from_str(json)?;
                 bail!("{}: {}", error.message, error.reason);
             },
 
@@ -185,11 +190,11 @@ impl HandlerImpl {
 impl wss::HandlerImpl for HandlerImpl {
     fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()> {
         let subscription = Subscription {
-            type_: "subscribe".to_string(),
-            product_ids: vec![self.params.symbol.name.clone()],
+            type_: "subscribe",
+            product_ids: &[&self.params.symbol.name],
             channels: vec![
-                "level2".to_string(),
-                "matches".to_string(),
+                "level2",
+                "matches",
             ],
         };
         

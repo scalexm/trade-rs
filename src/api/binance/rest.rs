@@ -16,10 +16,11 @@ impl QueryString {
     }
 
     fn push<P: fmt::Display>(&mut self, name: &str, arg: P) {
-        if !self.query.is_empty() {
-            self.query += "&";
+        if self.query.is_empty() {
+            self.query = format!("{}={}", name, arg);
+        } else {
+            self.query = format!("{}&{}={}", self.query, name, arg);
         }
-        self.query += &format!("{}={}", name, arg);
     }
 
     fn into_string(self) -> String {
@@ -58,22 +59,17 @@ impl AsStr for TimeInForce {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
-struct BinanceOrderAck {
-    symbol: String,
-    orderId: u64,
-    clientOrderId: String,
+struct BinanceOrderAck<'a> {
+    clientOrderId: &'a str,
     transactTime: u64,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
-struct BinanceCancelAck {
-    symbol: String,
-    origClientOrderId: String,
-    orderId: u64,
-    clientOrderId: String,
+struct BinanceCancelAck<'a> {
+    clientOrderId: &'a str,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -88,6 +84,12 @@ struct BinanceAccountInformation {
     canDeposit: bool,
     updateTime: u64,
     balances: Vec<Balance>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct BinanceListenKey<'a> {
+    listenKey: &'a str,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -184,7 +186,7 @@ impl Client {
         {
             let ack: BinanceOrderAck = serde_json::from_slice(&body)?;
             Ok(OrderAck {
-                order_id: ack.clientOrderId,
+                order_id: ack.clientOrderId.to_owned(),
                 timestamp: ack.transactTime,
             })
         });
@@ -208,7 +210,7 @@ impl Client {
         {
             let ack: BinanceCancelAck = serde_json::from_slice(&body)?;
             Ok(CancelAck {
-                cancel_id: ack.clientOrderId,
+                cancel_id: ack.clientOrderId.to_owned(),
             })
         });
         Box::new(fut)
@@ -221,11 +223,8 @@ impl Client {
         let fut = self.request("api/v1/userDataStream", Method::POST, query, Signature::No)
             .and_then(|body|
         {
-            let body: serde_json::Value = serde_json::from_slice(&body)?;
-            match body["listenKey"].as_str() {
-                Some(key) => Ok(key.to_string()),
-                None => bail!("status code 200 but no listen key was found"),
-            }
+            let key: BinanceListenKey = serde_json::from_slice(&body)?;
+            Ok(key.listenKey.to_owned())
         });
         Box::new(fut)
     }
