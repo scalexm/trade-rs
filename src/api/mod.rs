@@ -1,3 +1,5 @@
+//! A unified API for abstracting over various exchanges.
+
 pub mod binance;
 pub mod gdax;
 mod params;
@@ -63,7 +65,7 @@ pub struct Order {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An order to cancel a previous order.
 pub struct Cancel {
-    /// Identify the order to be canceled.
+    /// Identify the order to cancel.
     pub order_id: String,
 
     /// Delay until the cancel order becomes invalid if not treated by the server, in ms.

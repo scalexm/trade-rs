@@ -1,3 +1,8 @@
+//! Utilities for trading on crypto-currencies exchanges. Long term goal is to
+//! provide a general enough, unified API for abstracting over various exchanges,
+//! hence making it easier to develop cross exchange automated trading
+//! strategies.
+
 #![feature(crate_in_paths)]
 #![feature(crate_visibility_modifier)]
 #![feature(nll)]

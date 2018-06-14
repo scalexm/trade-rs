@@ -1,10 +1,13 @@
+//! A simple data structure representing an order book.
+
 use crate::*;
 use std::fmt;
 use std::collections::btree_map::{BTreeMap, Entry};
 use std::cell::Cell;
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
-/// An order book.
+/// An order book. Internally uses two `BTreeMap`, one
+/// for the bid side and another one for the ask side.
 pub struct OrderBook {
     ask: BTreeMap<Price, Size>,
     bid: BTreeMap<Price, Size>,
@@ -35,9 +38,31 @@ impl OrderBook {
         }
     }
 
+    /// Return best bid price. If the bid side is empty, return `0`.
+    /// Complexity: `O(1)`.
+    pub fn best_bid(&self) -> Price {
+        self.bid().next().map(|(price, _)| *price).unwrap_or(0)
+    }
+
+    /// Return best ask price. If the ask side is empty, return `Price::max_value()`.
+    /// Complexity: `O(1)`.
+    pub fn best_ask(&self) -> Price {
+        self.ask().next().map(|(price, _)| *price).unwrap_or(Price::max_value())
+    }
+
     /// Update the given limit with the given updated size.
+    /// Complexity: `O(log(n))` where `n` is the number of limits at
+    /// the given side.
     pub fn update(&mut self, update: LimitUpdate) {
         let entry = match update.side {
+            Side::Bid if update.size == 0 => {
+                self.bid.remove(&update.price);
+                return;
+            },
+            Side::Ask if update.size == 0 => {
+                self.ask.remove(&update.price);
+                return;
+            },
             Side::Bid => self.bid.entry(update.price),
             Side::Ask => self.ask.entry(update.price),
         };
@@ -49,28 +74,27 @@ impl OrderBook {
     }
 
     /// Retrieve the size at the given limit.
-    /// N.B.: `&mut self` because limits are initialized lazily.
-    pub fn size_at_limit(&mut self, side: Side, price: Price) -> Size {
-        let entry = match side {
-            Side::Bid => self.bid.entry(price),
-            Side::Ask => self.ask.entry(price),
+    /// Complexity: `O(log(n))` where `n` is the number of limits at
+    /// the given side.
+    pub fn size_at_limit(&self, side: Side, price: Price) -> Size {
+        let size = match side {
+            Side::Bid => self.bid.get(&price),
+            Side::Ask => self.ask.get(&price),
         };
-        *entry.or_insert(0)
+        size.map(|s| *s).unwrap_or(0)
     }
 
-    /// Iterator over the non-empty limits at bid, sorted by
+    /// Iterator over the limits at bid, sorted by
     /// descending key.
     pub fn bid(&self) -> impl Iterator<Item = (&Price, &Size)> {
         self.bid.iter()
                 .rev()
-                .filter(|(_, &size)| size > 0)
     }
 
-    /// Iterator over the non-empty limits at ask, sorted by
+    /// Iterator over the limits at ask, sorted by
     /// ascending key.
     pub fn ask(&self) -> impl Iterator<Item = (&Price, &Size)> {
         self.ask.iter()
-                .filter(|(_, &size)| size > 0)
     }
 }
 
@@ -125,7 +149,6 @@ impl fmt::Display for OrderBook {
 
         write!(f, "\n\n")?;
         for (&price, &size) in self.bid()
-                                   .filter(|(_, &size)| size > 0)
                                    .take(display_limit)
         {
             writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;

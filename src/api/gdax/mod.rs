@@ -1,3 +1,5 @@
+//! Implementation of `ApiClient` for the GDAX API.
+
 mod wss;
 mod rest;
 
@@ -35,6 +37,7 @@ struct Keys {
     pass_phrase: String,
 }
 
+/// A GDAX API client.
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
@@ -81,24 +84,33 @@ impl std::fmt::Display for RestError {
 /// Translate an HTTP error code to a GDAX error category.
 pub enum RestErrorCategory {
     #[fail(display = "bad request")]
+    /// Malformed request, issue on the lib side or consumer side.
     BadRequest,
 
     #[fail(display = "unauthorized - invalid API key")]
+    /// The API keys were invalid or did not have the right permissions.
     Unauthorized,
 
     #[fail(display = "forbidden")]
+    /// Forbidden.
     Forbidden,
 
     #[fail(display = "not found")]
+    /// Not found, issue on the consumer side (e.g. specified order id wasn't found
+    /// by the server when trying to cancel an order).
     NotFound,
 
     #[fail(display = "too many requests")]
+    /// The client broke the request rate limit set by GDAX. See GDAX API
+    /// documentation for each request weight and rate limits.
     TooManyRequests,
 
     #[fail(display = "internal server error")]
+    /// Issue on GDAX side.
     InternalError,
 
     #[fail(display = "unknown")]
+    /// Unknown error.
     Unknown,
 }
 
@@ -119,10 +131,12 @@ impl RestErrorCategory {
 }
 
 impl Client {
-    pub fn new(params: Params, with_pass_phrase: Option<KeyPair>)
-        -> Result<Self, Error>
+    /// Create a new GDAX API client with given `params`. If `key_pair` is not
+    /// `None`, this will enable performing requests to the REST API and will forward
+    /// the user data stream.
+    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error>
     {
-        match with_pass_phrase {
+        match key_pair {
             Some(pair) => {
                 let secret_key = PKey::hmac(&base64::decode(&pair.secret_key)?)?;
 

@@ -1,5 +1,5 @@
-/// A complete trading matching engine: can be used for e.g. simulations, or for implementing
-/// an exchange.
+//! A complete trading matching engine: can be used for e.g. simulations, or for implementing
+//! an exchange.
 
 mod arena;
 mod test;
@@ -17,7 +17,7 @@ pub struct Order {
     /// Order price.
     pub price: Price,
 
-    /// Order size, in atomic asset units.
+    /// Order size, in ticks.
     pub size: Size,
 
     /// Order side: `Bid` or `Ask`.
@@ -57,6 +57,19 @@ type BookEntries = Arena<BookEntry>;
 
 #[derive(Clone, Debug)]
 /// A matching engine.
+/// 
+/// The various price limits are represented with a `BTreeMap` which
+/// can contain empty price limits (price limits are initialized lazily
+/// but are not removed from the map if they become empty).
+/// 
+/// For each price limit, we associate an (intrusive) linked list
+/// (FIXME: should be doubly linked?) where each node represent a limit
+/// order and is allocated from a contiguous memory arena.
+/// 
+/// We keep track of the best limits so that they can be accessed with `O(1)`
+/// complexity, but keeping track of them can require up to `O(n)` operations
+/// when the order book is updated, with `n` being the size of the order book,
+/// although this is the worst case ever and should never happen in real life.
 pub struct MatchingEngine {
     /// The various price limits, which are initialized lazily.
     price_limits: PriceLimits,
@@ -187,7 +200,7 @@ impl Executor for BookEntries {
 }
 
 impl MatchingEngine {
-    /// Return a new matchin engine, pre-allocating `capacity` book entries.
+    /// Return a new matching engine, pre-allocating `capacity` book entries.
     pub fn new(capacity: usize) -> Self {
         MatchingEngine {
             price_limits: PriceLimits::new(),
@@ -199,11 +212,15 @@ impl MatchingEngine {
     }
 
     /// Return the best prices, respectively best bid and best ask.
+    /// Complexity: `O(1)`.
     pub fn best_limits(&self) -> (Price, Price) {
         (self.best_bid, self.best_ask)
     }
 
     /// Retrieve the size of the limit at the given price.
+    /// Complexity: can be `O(n)` if all the orders are in only
+    /// one price limit. FIXME: should be easy to fix though, just
+    /// keep track of the total size.
     pub fn size_at_price(&self, price: Price) -> Size {
         if let Some(limit) = self.price_limits.get(&price) {
             return self.entries.size_at_limit(limit);
@@ -253,6 +270,7 @@ impl MatchingEngine {
 
     /// Match or insert a limit order. If the order was inserted in the order book, return the
     /// corresponding `OrderId`.
+    /// Complexity: can be `O(n)` if the order crosses the whole order book.
     pub fn limit(&mut self, order: Order) -> Option<OrderId> {
         let (new_price, exec_result) = match order.side {
             Side::Bid if order.price >= self.best_ask => {

@@ -1,3 +1,27 @@
+//! On electronic exchanges, prices and sizes do not take continuous real values,
+//! but rather take their values on a discrete grid for whose step is known as a
+//! *tick*.
+//! In other words, the price tick is the smallest possible change of the price of
+//! an asset, and the size tick is the smallest possible change of the size of an
+//! order.
+//! 
+//! It is important to represent prices and sizes in ticks and not with fractional
+//! values like `100.27`.
+//! 
+//! Indeed, these fractional values could maybe be represented with a floating point
+//! numeric type, but then some prices would not be represented exactly and rounded
+//! to the nearest representable value, which is problematic because for some assets,
+//! even e.g. a 1 cent difference is a lot. They could also be represented with
+//! an arbitrary precision numeric type, but this would incur a lot of overhead.
+//! 
+//! Another problem is that many trading algorithms which involve making numerical
+//! computations output floating values, and those values must be rounded to the
+//! nearest tick in order to have a valid price / size, so generally the tick size
+//! must be carried along anyway.
+//! 
+//! This module defines utilities for converting between fractional values represented
+//! as strings (for exact precision) and values expressed in tick units.
+
 mod test;
 
 use std::fmt;
@@ -30,7 +54,7 @@ enum ValueType {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
 #[fail(display = "Failed to convert {:?} with tick {}", value, tick)]
-/// An error which indicated that the conversion of an unticked value to a
+/// An error which indicates that the conversion between an unticked value and a
 /// value in ticks has failed.
 pub struct ConversionError {
     tick: Tick,

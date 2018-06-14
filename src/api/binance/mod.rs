@@ -1,3 +1,5 @@
+//! Implementation of `ApiClient` for the binance API.
+
 mod wss;
 mod rest;
 
@@ -38,7 +40,7 @@ struct Keys {
 /// 
 /// The listen key is only valid for 60 minutes after its creation (through `Client::new`).
 /// Each `<Client as ApiClient>::ping` request will extend its validity for 60 minutes. Binance
-/// recommends to send a ping every 30 minutes.
+/// recommends sending a ping every 30 minutes.
 /// If the listen key becomes invalid, this client will stop forwarding the user data stream.
 /// The only way to fix it will be to drop the client and create a new one.
 pub struct Client {
@@ -94,13 +96,14 @@ impl std::fmt::Display for RestError {
 /// Translate an HTTP error code to a binance error category.
 pub enum RestErrorCategory {
     #[fail(display = "malformed request")]
-    /// Malformed request, issue on the lib side.
+    /// Malformed request, issue on the lib side or consumer side.
     MalformedRequest,
 
     #[fail(display = "broke rate limit")]
     /// The client broke the request rate limit set by binance. See binance API
-    /// documentation for each request weight. A user shouldn't send any more requests
-    /// after receiving such an error, or their IP address will be banned.
+    /// documentation for each request weight and rate limits.
+    /// A user shouldn't send any more requests after receiving such an error, or
+    /// their IP address will be banned.
     BrokeRateLimit,
 
     #[fail(display = "ip address was banned")]
@@ -116,7 +119,7 @@ pub enum RestErrorCategory {
     BinanceInternalError,
 
     #[fail(display = "unknown error")]
-    /// Unkown error.
+    /// Unknown error.
     Unknown,
 }
 
@@ -181,8 +184,9 @@ impl RestErrorCategory {
 }
 
 impl Client {
-    /// Create a new binance API client with given `params` and request a listen key
-    /// for the user data stream. The request will block the thread.
+    /// Create a new binance API client with given `params`. If `key_pair` is not
+    /// `None`, this will enable performing requests to the REST API and will request
+    /// a listen key for the user data stream. The request will block the thread.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error> {
         match key_pair {
             Some(pair) => {
@@ -256,6 +260,7 @@ pub struct Balance {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Account information for this client.
+/// FIXME: should be integrated to the API.
 pub struct AccountInformation {
     pub maker_commission: u64,
     pub taker_commission: u64,
