@@ -1,0 +1,10 @@
+{
+    "symbol": {
+        "name": "btcusdt",
+        "price_tick": 100,
+        "size_tick": 1000000,
+        "commission_tick": 100000000
+    },
+    "ws_address": "wss://stream.binance.com:9443",
+    "http_address": "https://api.binance.com" 
+}
