@@ -5,6 +5,8 @@ use api::*;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
 use base64;
+use chashmap::CHashMap;
+use std::sync::Arc;
 
 pub use api::params::*;
 
@@ -36,6 +38,7 @@ struct Keys {
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
+    order_ids: Arc<CHashMap<String, String>>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -129,13 +132,15 @@ impl Client {
                         api_key: pair.api_key,
                         secret_key,
                         pass_phrase: pair.pass_phrase,
-                    })
+                    }),
+                    order_ids: Arc::new(CHashMap::new()),
                 })
             },
             None => {
                 Ok(Client {
                     params,
                     keys: None,
+                    order_ids: Arc::new(CHashMap::new()),
                 })
             }
         }
@@ -158,12 +163,12 @@ impl ApiClient for Client {
     fn cancel(&self, cancel: &Cancel)
         -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
     {
-        unimplemented!()
+        self.cancel_impl(cancel)
     }
 
     fn ping(&self)
         -> Box<Future<Item = (), Error = Error> + Send + 'static>
     {
-        unimplemented!()
+        Box::new(Ok(()).into_future())
     }
 }

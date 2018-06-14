@@ -46,7 +46,7 @@ struct BinanceOrderAck<'a> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 struct BinanceCancelAck<'a> {
-    clientOrderId: &'a str,
+    origClientOrderId: &'a str,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -176,9 +176,6 @@ impl Client {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
         query.push("origClientOrderId", &cancel.order_id);
-        if let Some(cancel_id) = &cancel.cancel_id {
-            query.push("newClientOrderId", cancel_id);
-        }
         query.push("recvWindow", cancel.time_window);
         query.push("timestamp", timestamp_ms());
 
@@ -187,7 +184,7 @@ impl Client {
         {
             let ack: BinanceCancelAck = serde_json::from_slice(&body)?;
             Ok(CancelAck {
-                cancel_id: ack.clientOrderId.to_owned(),
+                order_id: ack.origClientOrderId.to_owned(),
             })
         });
         Box::new(fut)

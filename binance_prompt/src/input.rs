@@ -92,7 +92,6 @@ fn process_input(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
             let cancel = Cancel {
                 order_id: args[0].to_string(),
                 time_window: TIME_WINDOW.with(|cell| cell.get()),
-                cancel_id: None,
             };
 
             PUSH.with(move |cell| {

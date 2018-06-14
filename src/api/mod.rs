@@ -68,10 +68,6 @@ pub struct Cancel {
 
     /// Delay until the cancel order becomes invalid if not treated by the server, in ms.
     pub time_window: u64,
-
-    /// Unique id used to identify this cancel order, stringified.
-    /// Automatically generated if `None`.
-    pub cancel_id: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -87,8 +83,8 @@ pub struct OrderAck {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An acknowledgment that a cancel order has been treated by the server.
 pub struct CancelAck {
-    /// ID identifying the cancel order.
-    pub cancel_id: String,
+    /// ID identifying the canceled order.
+    pub order_id: String,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

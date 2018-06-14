@@ -84,6 +84,8 @@ impl Client {
     crate fn order_impl(&self, order: &Order)
         -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
     {
+        let client_oid = order.order_id.clone();
+
         let order = GdaxOrder {
             size: &self.params.symbol.size_tick.convert_ticked(order.size)
                 .expect("bad size tick"),
@@ -91,13 +93,15 @@ impl Client {
                 .expect("bad price tick"),
             side: &order.side.as_str().to_lowercase(),
             product_id: &self.params.symbol.name,
-            client_oid: order.order_id.as_ref().map(|oid| oid.as_ref()),
+            client_oid: client_oid.as_ref().map(|oid| oid.as_ref()),
             time_in_force: order.time_in_force.as_str(),
         };
 
         let body = serde_json::to_string(&order).expect("invalid json");
 
-        let fut = self.request("orders", Method::POST, body).and_then(|body| {
+        let order_ids = self.order_ids.clone();
+
+        let fut = self.request("orders", Method::POST, body).and_then(move |body| {
             let ack: GdaxOrderAck = serde_json::from_slice(&body)?;
 
             let time = Utc.datetime_from_str(
@@ -106,10 +110,37 @@ impl Client {
                 )?;
             let timestamp = (time.timestamp() as u64) * 1000
                 + u64::from(time.timestamp_subsec_millis());
+
+            let order_id = match client_oid {
+                Some(id) => id.clone(),
+                None => ack.id.to_owned(),
+            };
+            let _ = order_ids.insert(order_id.clone(), ack.id.to_owned());
+
             Ok(OrderAck {
-                // FIXME: keep a hash map client id <-> gdax id
-                order_id: ack.id.to_owned(),
+                order_id: order_id,
                 timestamp,
+            })
+        });
+        Box::new(fut)
+    }
+
+    crate fn cancel_impl(&self, cancel: &Cancel)
+        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
+    {
+        let order_id = match self.order_ids.get(&cancel.order_id) {
+            Some(order_id) => order_id,
+            None => return Box::new(
+                Err(format_err!("unknown order id: `{}`", cancel.order_id))
+                    .into_future()
+            ),
+        }.clone();
+
+        let fut = self.request(&format!("orders/{}", order_id), Method::DELETE, String::new())
+            .and_then(move |_|
+        {
+            Ok(CancelAck {
+                order_id,
             })
         });
         Box::new(fut)
