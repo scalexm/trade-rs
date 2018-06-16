@@ -13,7 +13,7 @@ pub struct OrderBook {
     bid: BTreeMap<Price, Size>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Represent a limit update of the order book.
 pub struct LimitUpdate {
     /// Side of the corresponding limit.

@@ -8,7 +8,7 @@ mod wss;
 use crate::*;
 use futures::prelude::*;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// See https://www.investopedia.com/terms/t/timeinforce.asp.
 pub enum TimeInForce {
     GoodTilCanceled,
@@ -39,7 +39,7 @@ impl AsStr for TimeInForce {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to be sent through the API.
 pub struct Order {
     /// Order side: `Bid` / buy or `Ask`/ sell.
@@ -62,7 +62,7 @@ pub struct Order {
     pub order_id: Option<String>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to cancel a previous order.
 pub struct Cancel {
     /// Identify the order to cancel.
@@ -72,7 +72,7 @@ pub struct Cancel {
     pub time_window: u64,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An acknowledgment that an order has been treated by the server.
 pub struct OrderAck {
     /// ID identifiying the order.
@@ -82,14 +82,14 @@ pub struct OrderAck {
     pub timestamp: u64,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An acknowledgment that a cancel order has been treated by the server.
 pub struct CancelAck {
     /// ID identifying the canceled order.
     pub order_id: String,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A notification that some order has been updated, i.e. a trade crossed through this order.
 pub struct OrderUpdate {
     /// ID identifying the order being updated.
@@ -113,7 +113,7 @@ pub struct OrderUpdate {
     pub timestamp: u64,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A liquidity consuming order.
 pub struct Trade {
     /// Size consumed by the trade.
@@ -133,7 +133,7 @@ pub struct Trade {
     pub maker_side: Side,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 /// A notification that some event happened.
 pub enum Notification {
     /// A trade was executed.

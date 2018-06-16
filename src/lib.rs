@@ -41,7 +41,7 @@ pub type Price = u64;
 /// Size of an order / trade, in ticks.
 pub type Size = u64;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Side of an order (bid or ask).
 pub enum Side {
     /// Bid side.

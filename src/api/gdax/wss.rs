@@ -218,10 +218,7 @@ impl wss::HandlerImpl for HandlerImpl {
         };
         
         match serde_json::to_string(&subscription) {
-            Ok(value) => {
-                println!("{}", value);
-                out.send(value)
-            },
+            Ok(value) => out.send(value),
             Err(err) => {
                 panic!("failed to serialize `Subscription`: `{}`", err);
             }
