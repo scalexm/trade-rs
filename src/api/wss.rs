@@ -10,6 +10,7 @@ use futures::sync::mpsc::UnboundedSender;
 crate struct Handler<T> {
     out: ws::Sender,
     snd: UnboundedSender<Notification>,
+    keep_alive: bool,
 
     /// We keep a reference to the `EXPIRE` timeout so that we can cancel it when we receive
     /// something from the server.
@@ -30,10 +31,17 @@ const PING_TIMEOUT: u64 = 10_000;
 const EXPIRE_TIMEOUT: u64 = 30_000;
 
 impl<T> Handler<T> {
-    crate fn new(out: ws::Sender, snd: UnboundedSender<Notification>, inner: T) -> Self {
+    crate fn new(
+        out: ws::Sender,
+        snd: UnboundedSender<Notification>,
+        keep_alive: bool,
+        inner: T
+    ) -> Self
+    {
         Handler {
             out,
             snd,
+            keep_alive,
             timeout: None,
             inner,
         }
@@ -53,12 +61,10 @@ impl<T: HandlerImpl> ws::Handler for Handler<T> {
     fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
         self.inner.on_open(&self.out)?;
 
-        self.out.timeout(PING_TIMEOUT, PING)?;
+        if self.keep_alive {
+            self.out.timeout(PING_TIMEOUT, PING)?;
+        }
         self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)
-    }
-
-    fn on_shutdown(&mut self) {
-        info!("Client shutting down");
     }
 
     fn on_timeout(&mut self, event: Token) -> ws::Result<()> {

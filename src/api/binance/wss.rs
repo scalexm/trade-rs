@@ -25,7 +25,7 @@ impl Client {
             info!("Initiating WebSocket connection at {}", address);
 
             if let Err(err) = ws::connect(address.as_ref(), |out| {
-                wss::Handler::new(out, snd.clone(), HandlerImpl{
+                wss::Handler::new(out, snd.clone(), true, HandlerImpl{
                     params: params.clone(),
                     book_snapshot_state: BookSnapshotState::None,
                     previous_u: None,

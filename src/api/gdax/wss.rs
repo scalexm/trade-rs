@@ -15,7 +15,7 @@ impl Client {
             info!("Initiating WebSocket connection at {}", params.ws_address);
             
             if let Err(err) = ws::connect(params.ws_address.as_ref(), |out| {
-                wss::Handler::new(out, snd.clone(), HandlerImpl {
+                wss::Handler::new(out, snd.clone(), false, HandlerImpl {
                     params: params.clone(),
                     state: SubscriptionState::NotSubscribed,
                 })

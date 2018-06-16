@@ -60,7 +60,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
     }
 
     pub(in prompt) fn run(mut self) {
-        let push = mem::replace(&mut self.push, None);
+        let push = self.push.take();
         let fut = push.unwrap().for_each(move |event| {
             self.process_event(event)
         });
@@ -99,7 +99,7 @@ impl<S: Stream<Item = Notification, Error = ()>> OrderBookThread<S> {
 
     pub(in prompt) fn run(mut self) {
         let pull = self.pull.clone();
-        let stream = mem::replace(&mut self.stream, None);
+        let stream = self.stream.take();
 
         let fut = stream.unwrap().for_each(move |notif| {
             self.process_notif(notif)
