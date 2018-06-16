@@ -41,17 +41,27 @@ struct HandlerImpl {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
+#[serde(untagged)]
+enum GdaxChannel<'a> {
+    Channel(&'a str),
+    WithProducts {
+        name: &'a str,
+        product_ids: &'a [&'a str],
+    },
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
 /// Subscription parameters to be sent to GDAX.
-struct Subscription<'a> {
+struct GdaxSubscription<'a> {
     #[serde(rename = "type")]
     type_: &'a str,
     product_ids: &'a [&'a str],
-    channels: Vec<&'a str>,
+    channels: Vec<GdaxChannel<'a>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 /// A JSON representation of an order book snapshot, sent by GDAX.
-struct BookSnapshot<'a> {
+struct GdaxBookSnapshot<'a> {
     #[serde(borrow)]
     bids: Vec<(&'a str, &'a str)>,
     #[serde(borrow)]
@@ -123,7 +133,7 @@ impl HandlerImpl {
             },
 
             "snapshot" => {
-                let snapshot: BookSnapshot = serde_json::from_str(json)?;
+                let snapshot: GdaxBookSnapshot = serde_json::from_str(json)?;
                 let timestamp = timestamp_ms();
 
                 let bid = snapshot.bids
@@ -193,17 +203,25 @@ impl HandlerImpl {
 
 impl wss::HandlerImpl for HandlerImpl {
     fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()> {
-        let subscription = Subscription {
+        let product_ids = [self.params.symbol.name.as_ref()];
+        let subscription = GdaxSubscription {
             type_: "subscribe",
-            product_ids: &[&self.params.symbol.name],
+            product_ids: &product_ids,
             channels: vec![
-                "level2",
-                "matches",
+                GdaxChannel::Channel("level2"),
+                GdaxChannel::Channel("matches"),
+                GdaxChannel::WithProducts {
+                    name: "heartbeat",
+                    product_ids: &product_ids,
+                },
             ],
         };
         
         match serde_json::to_string(&subscription) {
-            Ok(value) => out.send(value),
+            Ok(value) => {
+                println!("{}", value);
+                out.send(value)
+            },
             Err(err) => {
                 panic!("failed to serialize `Subscription`: `{}`", err);
             }
