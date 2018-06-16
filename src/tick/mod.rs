@@ -36,13 +36,11 @@ use std::convert::TryInto;
 /// the tick size is 1e-8, so the number of ticks per unit would be 1e8.
 /// 
 /// Used for both prices and sizes.
-pub struct Tick {
-    ticks_per_unit: u64,
-}
+pub struct Tick(u64);
 
 impl fmt::Display for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({}^-1)", self.ticks_per_unit)
+        write!(f, "({}^-1)", self.0)
     }
 }
 
@@ -84,14 +82,12 @@ impl Tick {
             panic!("`ticks_per_unit` cannot be 0");
         }
 
-        Tick {
-            ticks_per_unit,
-        }
+        Tick(ticks_per_unit)
     }
 
     /// Return the number of ticks per unit carried by `self`.
     pub fn ticks_per_unit(&self) -> u64 {
-        self.ticks_per_unit
+        self.0
     }
 
     /// Convert an unticked value, e.g. "0.001" into a value expressed in ticks,
@@ -116,7 +112,7 @@ impl Tick {
             Err(..) => return Err(ConversionError::unticked(unticked, *self)),
         };
 
-        let ratio = rational::Ratio::from_integer(u128::from(self.ticks_per_unit)) * ratio;
+        let ratio = rational::Ratio::from_integer(u128::from(self.0)) * ratio;
 
         if !ratio.is_integer() {
             return Err(ConversionError::unticked(unticked, *self));
@@ -131,18 +127,18 @@ impl Tick {
     pub fn convert_ticked(&self, ticked: u64) -> Result<String, ConversionError> {
         let mut pow = 1;
         let mut pad = 0;
-        while self.ticks_per_unit > pow {
+        while self.0 > pow {
             pad += 1;
             pow *= 10;
         }
 
-        if pow % self.ticks_per_unit != 0 {
+        if pow % self.0 != 0 {
             return Err(ConversionError::ticked(ticked, *self));
         }
 
-        let int = ticked / self.ticks_per_unit;
+        let int = ticked / self.0;
         let prevent_overflow = u128::from(pow) * u128::from(ticked)
-            / u128::from(self.ticks_per_unit);
+            / u128::from(self.0);
         let prevent_overflow: u64 = prevent_overflow.try_into().unwrap();
         
         Ok(format!(
