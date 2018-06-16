@@ -89,6 +89,11 @@ impl Tick {
         }
     }
 
+    /// Return the number of ticks per unit carried by `self`.
+    pub fn ticks_per_unit(&self) -> u64 {
+        self.ticks_per_unit
+    }
+
     /// Convert an unticked value, e.g. "0.001" into a value expressed in ticks,
     /// e.g. if `self.ticks_per_unit == 1000" then this would return `Ok(1)`.
     /// 
