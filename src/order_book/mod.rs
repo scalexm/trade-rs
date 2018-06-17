@@ -1,5 +1,7 @@
 //! A simple data structure representing an order book.
 
+mod test;
+
 use crate::*;
 use std::fmt;
 use std::collections::btree_map::{BTreeMap, Entry};
@@ -16,8 +18,8 @@ pub struct OrderBook {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Represent a limit update of the order book.
 pub struct LimitUpdate {
-    /// Side of the corresponding limit.
-    pub side: Side,
+    /// Timestamp at which the update happened, in ms.
+    pub timestamp: u64,
 
     /// Price of the corresponding limit.
     pub price: Price,
@@ -25,8 +27,8 @@ pub struct LimitUpdate {
     /// Updated size.
     pub size: Size,
 
-    /// Timestamp at which the update happened, in ms.
-    pub timestamp: u64,
+    /// Side of the corresponding limit.
+    pub side: Side,
 }
 
 impl OrderBook {
@@ -95,6 +97,66 @@ impl OrderBook {
     /// ascending key.
     pub fn ask(&self) -> impl Iterator<Item = (&Price, &Size)> {
         self.ask.iter()
+    }
+
+    /// Compute the set of limit updates to apply to `self` in order
+    /// to be equal to `other`.
+    /// Complexity: `O(n + m)` where `n` is `self`'s length and `m` is
+    /// `other`'s length.
+    /// 
+    /// # Example
+    /// ```
+    /// # extern crate trade;
+    /// # use trade::order_book::OrderBook;
+    /// # fn main() {
+    /// # let mut order_book1 = OrderBook::new();
+    /// # let order_book2 = OrderBook::new();
+    /// let diff = order_book1.diff(&order_book2);
+    /// for u in diff {
+    ///     order_book1.update(u);
+    /// }
+    /// assert_eq!(order_book1, order_book2);
+    /// # }
+    /// ```
+    pub fn diff(&self, other: &OrderBook) -> Vec<LimitUpdate> {
+        use std::collections::HashMap;
+
+        let timestamp = timestamp_ms();
+        let mut updates = Vec::new();
+
+        let mut compute_diff = |entries: &BTreeMap<_, _>, other_entries, side| {
+            let mut entries: HashMap<_, _> = entries.iter().map(|(x, y)| (*x, *y)).collect();
+
+            for (&price, &other_size) in other_entries {
+                let need_update = match entries.remove(&price) {
+                    Some(size) => size != other_size,
+                    None => true,
+                };
+
+                if need_update {
+                    updates.push(LimitUpdate {
+                        timestamp,
+                        price,
+                        size: other_size,
+                        side,
+                    });
+                }
+            }
+
+            for (price, _) in entries {
+                updates.push(LimitUpdate {
+                    timestamp,
+                    price,
+                    size: 0,
+                    side,
+                });
+            }
+        };
+
+        compute_diff(&self.bid, &other.bid, Side::Bid);
+        compute_diff(&self.ask, &other.ask, Side::Ask);
+
+        updates
     }
 }
 

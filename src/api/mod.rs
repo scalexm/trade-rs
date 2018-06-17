@@ -42,14 +42,14 @@ impl AsStr for TimeInForce {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to be sent through the API.
 pub struct Order {
-    /// Order side: `Bid` / buy or `Ask`/ sell.
-    pub side: Side,
-
     /// Order price.
     pub price: Price,
 
     /// Order size.
     pub size: Size,
+
+    /// Order side: `Bid` / buy or `Ask`/ sell.
+    pub side: Side,
 
     /// Time in force, see https://www.investopedia.com/terms/t/timeinforce.asp.
     pub time_in_force: TimeInForce,
@@ -75,11 +75,11 @@ pub struct Cancel {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An acknowledgment that an order has been treated by the server.
 pub struct OrderAck {
-    /// ID identifiying the order.
-    pub order_id: String,
-
     /// Timestamp at which the order was treated, in ms.
     pub timestamp: u64,
+
+    /// ID identifiying the order.
+    pub order_id: String,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -116,14 +116,14 @@ pub struct OrderUpdate {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A liquidity consuming order.
 pub struct Trade {
-    /// Size consumed by the trade.
-    pub size: Size,
-
     // Trade timestamp, in ms.
     pub timestamp: u64,
 
     /// Price in ticks.
     pub price: Price,
+
+    /// Size consumed by the trade.
+    pub size: Size,
 
     /// Side of the maker:
     /// * if `Ask`, then the maker was providing liquidity on the ask side,
