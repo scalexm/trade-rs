@@ -32,8 +32,8 @@ pub mod tick;
 
 pub use failure::Error;
 
-pub use tick::*;
-pub use order_book::*;
+pub use tick::Tick;
+pub use order_book::OrderBook;
 
 /// A price, in ticks.
 pub type Price = u64;

@@ -1,4 +1,5 @@
-use crate::*;
+use order_book::LimitUpdate;
+use tick::ConversionError;
 use api::*;
 use std::{mem, thread};
 use ws;
@@ -250,12 +251,14 @@ impl HandlerImpl {
                         })
                     ),
 
-                    "EXPIRED" => Some(
-                        Notification::OrderExpired(report.c.to_owned())
+                    "EXPIRED" | "CANCELED" => Some(
+                        Notification::OrderExpired(OrderExpired {
+                            timestamp: report.T,
+                            order_id: report.c.to_owned(),
+                        })
                     ),
 
-                    // "NEW", "CANCELED" and "REJECTED" should already be handled by the
-                    // REST API.
+                    // "NEW" and "REJECTED" should already be handled by the REST API.
                     _ => None,
                 }
             }
@@ -399,7 +402,7 @@ impl wss::HandlerImpl for HandlerImpl {
         out.ping(vec![])
     }
 
-    fn on_message(&mut self, text: String) -> Result<Option<Notification>, Error> {
+    fn on_message(&mut self, text: String) -> Result<Vec<Notification>, Error> {
         match self.parse_message(&text) {
             // Depth update notif: behavior depends on the status of the order book snapshot.
             Ok(Some(Notification::LimitUpdates(updates))) => {
@@ -407,7 +410,7 @@ impl wss::HandlerImpl for HandlerImpl {
                     // Very first limit update event received: time to ask for the book snapshot.
                     BookSnapshotState::None => {
                         self.request_book_snapshot(updates);
-                        Ok(None)
+                        Ok(vec![])
                     },
 
                     // Still waiting: buffer incoming events.
@@ -416,19 +419,19 @@ impl wss::HandlerImpl for HandlerImpl {
                             u: self.previous_u.unwrap(),
                             updates,
                         });
-                        Ok(self.maybe_recv_book(state))
+                        Ok(self.maybe_recv_book(state).into_iter().collect())
                     },
 
                     // We already received the book snapshot and notified the final consumer,
                     // we can now notify further notifications to them.
                     BookSnapshotState::Ok => {
-                        Ok(Some(Notification::LimitUpdates(updates)))
+                        Ok(vec![Notification::LimitUpdates(updates)])
                     },
                 }
             },
 
             // Other notif: just forward to the consumer.
-            other => other,
+            other => Ok(other?.into_iter().collect()),
         }
     }
 }

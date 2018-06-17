@@ -7,8 +7,6 @@ use api::*;
 use openssl::pkey::{PKey, Private};
 use hyper::StatusCode;
 
-pub use api::params::*;
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A binance key pair: api key + secret key.
 pub struct KeyPair {

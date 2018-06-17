@@ -48,4 +48,10 @@ fn test_diff() {
     }
 
     assert_eq!(odb1, odb2);
+
+    let mut odb1 = OrderBook::new();
+    for u in odb1.diff(&odb2) {
+        odb1.update(u);
+    }
+    assert_eq!(odb1, odb2);
 }

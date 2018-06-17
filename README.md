@@ -9,11 +9,8 @@ Uses [tokio](https://github.com/tokio-rs/tokio), [hyper](https://github.com/hype
 and [ws-rs](https://github.com/housleyjk/ws-rs) for asynchronous requests and
 streaming.
 
-Some (currently undocumented) sample code can be found in the `binance_prompt`
-CLI app.
+Some sample code can be found in the `api-prompt` CLI app.
 
 Exchanges currently implemented:
 * binance
-
-Next to come:
 * GDAX

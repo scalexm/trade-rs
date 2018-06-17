@@ -10,8 +10,6 @@ use base64;
 use chashmap::CHashMap;
 use std::sync::Arc;
 
-pub use api::params::*;
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A GDAX key pair: api key + secret key, along with a pass phrase.
 pub struct KeyPair {
@@ -31,9 +29,10 @@ impl KeyPair {
     }
 }
 
+#[derive(Clone)]
 struct Keys {
     api_key: String,
-    secret_key: PKey<Private>,
+    secret_key: Arc<PKey<Private>>,
     pass_phrase: String,
 }
 
@@ -41,6 +40,8 @@ struct Keys {
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
+
+    // client order id => server order id
     order_ids: Arc<CHashMap<String, String>>,
 }
 
@@ -134,30 +135,25 @@ impl Client {
     /// Create a new GDAX API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will forward
     /// the user data stream.
-    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error>
-    {
-        match key_pair {
+    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error> {
+        let keys = match key_pair {
             Some(pair) => {
                 let secret_key = PKey::hmac(&base64::decode(&pair.secret_key)?)?;
 
-                Ok(Client {
-                    params,
-                    keys: Some(Keys {
-                        api_key: pair.api_key,
-                        secret_key,
-                        pass_phrase: pair.pass_phrase,
-                    }),
-                    order_ids: Arc::new(CHashMap::new()),
+                Some(Keys {
+                    api_key: pair.api_key,
+                    secret_key: Arc::new(secret_key),
+                    pass_phrase: pair.pass_phrase,
                 })
             },
-            None => {
-                Ok(Client {
-                    params,
-                    keys: None,
-                    order_ids: Arc::new(CHashMap::new()),
-                })
-            }
-        }
+            None => None,
+        };
+
+        Ok(Client {
+            params,
+            keys,
+            order_ids: Arc::new(CHashMap::new()),
+        })
     }
 }
 

@@ -46,33 +46,38 @@ fn process_input(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
     -> Result<(), Error>
 {
     match cmd {
-        "order" => {
-            if args.len() < 4 {
+        side @ "buy" | side @ "sell" => {
+            if args.len() < 3 {
                 bail!("wrong number of arguments");
             }
 
-            let side = match args[0].to_lowercase().as_ref() {
+            let side = match side {
                 "buy" => Side::Bid,
                 "sell" => Side::Ask,
-                other => bail!("expected side, got `{}`", other),
+                _ => unreachable!(),
             };
 
-            let size = size_tick.convert_unticked(&args[1])?;
-            let price = price_tick.convert_unticked(&args[2])?;
+            let size = size_tick.convert_unticked(&args[0])?;
+            let price = price_tick.convert_unticked(&args[1])?;
 
-            let time_in_force = match args[3].to_lowercase().as_ref() {
+            let time_in_force = match args[2].to_lowercase().as_ref() {
                 "gtc" => TimeInForce::GoodTilCanceled,
                 "ioc" => TimeInForce::ImmediateOrCancel,
                 "fok" => TimeInForce::FillOrKilll,
                 other => bail!("expected time in force, got `{}`", other),
             };
 
+            let mut order_id = None;
+            if args.len() == 4 {
+                order_id = Some(args[3].to_owned());
+            }
+
             let order = Order {
                 side,
                 size,
                 price,
                 time_in_force,
-                order_id: None,
+                order_id,
                 time_window: TIME_WINDOW.with(|cell| cell.get()),
             };
 

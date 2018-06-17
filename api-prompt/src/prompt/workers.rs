@@ -5,13 +5,12 @@ use tokio::runtime;
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedReceiver;
 use std::sync::mpsc;
-use std::mem;
 
 pub(in prompt) enum PullEvent {
     OrderAck(Result<Order, Error>),
     CancelAck(Result<Cancel, Error>),
     OrderUpdate(OrderUpdate),
-    OrderExpired(String),
+    OrderExpired(OrderExpired),
     OrderBook(OrderBook),
     Message(String),
 }
@@ -89,8 +88,8 @@ impl<S: Stream<Item = Notification, Error = ()>> OrderBookThread<S> {
             Notification::OrderUpdate(update) => {
                 self.pull.send(PullEvent::OrderUpdate(update)).unwrap();
             },
-            Notification::OrderExpired(order_id) => {
-                self.pull.send(PullEvent::OrderExpired(order_id)).unwrap();
+            Notification::OrderExpired(expiration) => {
+                self.pull.send(PullEvent::OrderExpired(expiration)).unwrap();
             }
             _ => (),
         }

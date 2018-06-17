@@ -6,7 +6,10 @@ mod params;
 mod wss;
 
 use crate::*;
+use order_book::LimitUpdate;
 use futures::prelude::*;
+
+pub use self::params::*;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// See https://www.investopedia.com/terms/t/timeinforce.asp.
@@ -92,6 +95,9 @@ pub struct CancelAck {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A notification that some order has been updated, i.e. a trade crossed through this order.
 pub struct OrderUpdate {
+    /// Timestamp at which the update happened, in ms.
+    pub timestamp: u64,
+
     /// ID identifying the order being updated.
     pub order_id: String,
 
@@ -108,9 +114,6 @@ pub struct OrderUpdate {
     /// Commission amount (warning: for binance this may not be in the same currency as
     /// the traded asset).
     pub commission: Size,
-
-    /// Timestamp at which the update happened, in ms.
-    pub timestamp: u64,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -133,6 +136,16 @@ pub struct Trade {
     pub maker_side: Side,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A notification that some order has expired or was canceled.
+pub struct OrderExpired {
+    /// Expiration timestamp, in ms.
+    pub timestamp: u64,
+
+    /// Expired order.
+    pub order_id: String,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 /// A notification that some event happened.
 pub enum Notification {
@@ -145,8 +158,8 @@ pub enum Notification {
     /// An order has been updated.
     OrderUpdate(OrderUpdate),
 
-    /// An order has expired.
-    OrderExpired(String),
+    /// An order has expired or was canceled.
+    OrderExpired(OrderExpired),
 }
 
 /// A trait implemented by clients of various exchanges API.

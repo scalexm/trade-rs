@@ -1,0 +1,5 @@
+{
+    "api_key": "my-gdax-api-key",
+    "secret_key": "my-gdax-secret-key",
+    "pass_phrase": "my-gdax-pass-phrase"
+}

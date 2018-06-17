@@ -1,6 +1,6 @@
 use super::*;
 use openssl::{sign::Signer, hash::MessageDigest};
-use hyper::{Method, Request, Body};
+use hyper::{Method, Request, self};
 use chrono::{Utc, TimeZone};
 use base64;
 
@@ -49,7 +49,9 @@ impl Client {
             .header("CB-ACCESS-SIGN", signature.as_bytes())
             .header("CB-ACCESS-TIMESTAMP", format!("{}", timestamp).as_bytes())
             .header("CB-ACCESS-PASSPHRASE", keys.pass_phrase.as_bytes())
-            .body(Body::empty());
+            .header("User-Agent", "hyper".as_bytes())
+            .header("Content-Type", "application/json".as_bytes())
+            .body(body.into());
         
         let request = match request {
             Ok(request) => request,
@@ -85,6 +87,7 @@ impl Client {
         -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
     {
         let client_oid = order.order_id.clone();
+        let time_in_force = order.time_in_force;
 
         let order = GdaxOrder {
             size: &self.params.symbol.size_tick.convert_ticked(order.size)
@@ -94,7 +97,7 @@ impl Client {
             side: &order.side.as_str().to_lowercase(),
             product_id: &self.params.symbol.name,
             client_oid: client_oid.as_ref().map(|oid| oid.as_ref()),
-            time_in_force: order.time_in_force.as_str(),
+            time_in_force: time_in_force.as_str(),
         };
 
         let body = serde_json::to_string(&order).expect("invalid json");
@@ -115,7 +118,7 @@ impl Client {
                 Some(id) => id.clone(),
                 None => ack.id.to_owned(),
             };
-            let _ = order_ids.insert(order_id.clone(), ack.id.to_owned());
+            order_ids.insert(order_id.clone(), ack.id.to_owned());
 
             Ok(OrderAck {
                 order_id: order_id,

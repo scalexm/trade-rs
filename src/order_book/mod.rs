@@ -111,8 +111,7 @@ impl OrderBook {
     /// # fn main() {
     /// # let mut order_book1 = OrderBook::new();
     /// # let order_book2 = OrderBook::new();
-    /// let diff = order_book1.diff(&order_book2);
-    /// for u in diff {
+    /// for u in order_book1.diff(&order_book2) {
     ///     order_book1.update(u);
     /// }
     /// assert_eq!(order_book1, order_book2);

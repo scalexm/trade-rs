@@ -104,14 +104,14 @@ impl Prompt {
                     );
                 }
             },
-            PullEvent::OrderExpired(order_id) => {
-                if self.orders.remove(&order_id).is_none() {
+            PullEvent::OrderExpired(expiration) => {
+                if self.orders.remove(&expiration.order_id).is_none() {
                     self.output = format!(
                         "received `OrderExpired` for unknown order `{}`",
-                        order_id
+                        expiration.order_id
                     );
                 } else {
-                    self.output = format!("order `{}` has expired", order_id);
+                    self.output = format!("order `{}` has expired", expiration.order_id);
                 }
             }
             PullEvent::OrderBook(order_book) => {

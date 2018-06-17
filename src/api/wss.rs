@@ -21,7 +21,7 @@ crate struct Handler<T> {
 
 crate trait HandlerImpl {
     fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()>;
-    fn on_message(&mut self, text: String) -> Result<Option<Notification>, Error>;
+    fn on_message(&mut self, text: String) -> Result<Vec<Notification>, Error>;
 }
 
 const PING: Token = Token(1);
@@ -96,11 +96,11 @@ impl<T: HandlerImpl> ws::Handler for Handler<T> {
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(text) = msg {
             match self.inner.on_message(text) {
-                Ok(Some(notif)) => {
-                    self.send(notif)?;
+                Ok(notifs) => {
+                    for notif in notifs {
+                        self.send(notif)?;
+                    }
                 },
-
-                Ok(None) => (),
 
                 Err(err) => {
                     error!("Message parsing encountered error: `{}`", err)

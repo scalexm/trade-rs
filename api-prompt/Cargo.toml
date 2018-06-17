@@ -1,5 +1,5 @@
 [package]
-name = "binance-prompt"
+name = "api-prompt"
 version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
 
@@ -11,3 +11,4 @@ trade = { path = "../" }
 serde_json = "^1.0"
 failure = "^0.1"
 env_logger = "^0.5"
+clap = "^2"
