@@ -227,6 +227,22 @@ impl HandlerImpl {
                 let report: BinanceExecutionReport = serde_json::from_str(json)?;
 
                 match report.x.as_ref() {
+                    "NEW" => Some(
+                        Notification::OrderReceived(OrderReceived {
+                            order_id: report.c.to_owned(),
+                            size: self.params.symbol.size_tick
+                                .convert_unticked(report.q)?,
+                            price: self.params.symbol.price_tick
+                                .convert_unticked(report.p)?,
+                            side: match report.S {
+                                "BUY" => Side::Bid,
+                                "SELL" => Side::Ask,
+                                other => bail!("wrong side `{}`", other),
+                            },
+                            timestamp: report.T,
+                        })
+                    ),
+                    
                     "TRADE" => Some(
                         Notification::OrderUpdate(OrderUpdate {
                             order_id: report.c.to_owned(),
@@ -258,7 +274,7 @@ impl HandlerImpl {
                         })
                     ),
 
-                    // "NEW" and "REJECTED" should already be handled by the REST API.
+                    // "REJECTED" should already be handled by the REST API.
                     _ => None,
                 }
             }

@@ -21,7 +21,7 @@ impl View for Prompt {
         for (i, order) in self.orders.values().enumerate() {
             let line = format!(
                 "{}: {} @ {} ({:?})",
-                order.order_id.as_ref().unwrap(),
+                order.order_id,
                 order_book::displayable_size(order.size),
                 order_book::displayable_price(order.price),
                 order.side

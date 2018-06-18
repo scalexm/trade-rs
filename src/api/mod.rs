@@ -146,6 +146,25 @@ pub struct OrderExpired {
     pub order_id: String,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A notification that some order has been received by the exchange.
+pub struct OrderReceived {
+    /// Timestamp at which the order was received.
+    pub timestamp: u64,
+
+    /// Unique order id.
+    pub order_id: String,
+
+    /// Price at which the order was inserted.
+    pub price: Price,
+
+    /// Size at which the order was inserted.
+    pub size: Price,
+
+    /// Side of the order.
+    pub side: Side,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 /// A notification that some event happened.
 pub enum Notification {
@@ -154,6 +173,8 @@ pub enum Notification {
 
     /// The limit order book has changed and should be updated.
     LimitUpdates(Vec<LimitUpdate>),
+
+    OrderReceived(OrderReceived),
 
     /// An order has been updated.
     OrderUpdate(OrderUpdate),

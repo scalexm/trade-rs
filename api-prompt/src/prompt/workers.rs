@@ -7,8 +7,9 @@ use futures::sync::mpsc::UnboundedReceiver;
 use std::sync::mpsc;
 
 pub(in prompt) enum PullEvent {
-    OrderAck(Result<Order, Error>),
-    CancelAck(Result<Cancel, Error>),
+    OrderAck(Option<Error>),
+    CancelAck(Option<Error>),
+    OrderReceived(OrderReceived),
     OrderUpdate(OrderUpdate),
     OrderExpired(OrderExpired),
     OrderBook(OrderBook),
@@ -33,11 +34,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
             PushEvent::Order(order) => {
                 let cloned = self.pull.clone();
                 let order_fut = self.client.order(&order).then(move |res| {
-                    let res = res.map(|ack| Order {
-                        order_id: Some(ack.order_id),
-                        ..order
-                    });
-                    cloned.send(PullEvent::OrderAck(res)).unwrap();
+                    cloned.send(PullEvent::OrderAck(res.err())).unwrap();
                     Ok(())
                 });
                 current_thread::spawn(order_fut);
@@ -45,8 +42,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
             PushEvent::Cancel(cancel) => {
                 let cloned = self.pull.clone();
                 let cancel_fut = self.client.cancel(&cancel).then(move |res| {
-                    let res = res.map(|_| cancel);
-                    cloned.send(PullEvent::CancelAck(res)).unwrap();
+                    cloned.send(PullEvent::CancelAck(res.err())).unwrap();
                     Ok(())
                 });
                 current_thread::spawn(cancel_fut);
@@ -84,13 +80,16 @@ impl<S: Stream<Item = Notification, Error = ()>> OrderBookThread<S> {
                     self.order_book.update(update);
                 }
                 self.pull.send(PullEvent::OrderBook(self.order_book.clone())).unwrap();
-            }
+            },
+            Notification::OrderReceived(received) => {
+                self.pull.send(PullEvent::OrderReceived(received)).unwrap();
+            },
             Notification::OrderUpdate(update) => {
                 self.pull.send(PullEvent::OrderUpdate(update)).unwrap();
             },
             Notification::OrderExpired(expiration) => {
                 self.pull.send(PullEvent::OrderExpired(expiration)).unwrap();
-            }
+            },
             _ => (),
         }
         Ok(())

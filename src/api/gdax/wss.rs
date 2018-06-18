@@ -46,7 +46,7 @@ struct HandlerImpl {
     keys: Option<Keys>,
 
     // server order id => client order
-    orders: HashMap<String, Order>,
+    orders: HashMap<String, OrderReceived>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
@@ -104,10 +104,12 @@ struct GdaxMatch<'a> {
     side: &'a str,
     maker_order_id: &'a str,
     taker_order_id: &'a str,
+    profile_id: Option<&'a str>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 struct GdaxReceived<'a> {
+    time: &'a str,
     client_oid: Option<&'a str>,
     order_id: &'a str,
     size: &'a str,
@@ -223,27 +225,30 @@ impl HandlerImpl {
                 
                 let mut notifs = Vec::new();
 
-                let mut update_order = |order: &mut Order| {
-                    order.size -= size;
+                // An order which is about us
+                if trade.profile_id.is_some() {
+                    let mut update_order = |order: &mut OrderReceived| {
+                        order.size -= size;
 
-                    notifs.push(
-                        Notification::OrderUpdate(OrderUpdate {
-                            timestamp,
-                            order_id: order.order_id.as_ref().unwrap().clone(),
-                            consumed_size: size,
-                            consumed_price: price,
-                            remaining_size: order.size,
-                            commission: 0,
-                        })
-                    );
-                };
+                        notifs.push(
+                            Notification::OrderUpdate(OrderUpdate {
+                                timestamp,
+                                order_id: order.order_id.clone(),
+                                consumed_size: size,
+                                consumed_price: price,
+                                remaining_size: order.size,
+                                commission: 0,
+                            })
+                        );
+                    };
 
-                // These two conditions are exclusive.
-                if let Some(order) = self.orders.get_mut(trade.taker_order_id) {
-                    update_order(order);
-                }
-                if let Some(order) = self.orders.get_mut(trade.maker_order_id) {
-                    update_order(order);
+                    // These two conditions are exclusive.
+                    if let Some(order) = self.orders.get_mut(trade.taker_order_id) {
+                        update_order(order);
+                    }
+                    if let Some(order) = self.orders.get_mut(trade.maker_order_id) {
+                        update_order(order);
+                    }
                 }
 
                 notifs.push(
@@ -260,19 +265,31 @@ impl HandlerImpl {
 
             "received" => {
                 let received: GdaxReceived = serde_json::from_str(json)?;
-                self.orders.insert(received.order_id.to_owned(), Order {
-                    price: self.params.symbol.price_tick.convert_unticked(received.price)?,
-                    size: self.params.symbol.size_tick.convert_unticked(received.size)?,
-                    side: self.convert_gdax_side(received.side)?,
-                    time_in_force: TimeInForce::GoodTilCanceled,
-                    time_window: 0,
-                    order_id: Some(
-                        received.client_oid.map(|oid| oid.to_owned())
-                            .unwrap_or_else(|| received.order_id.to_owned())
-                    )
-                });
+                let time = Utc.datetime_from_str(
+                    received.time,
+                    "%FT%T.%fZ"
+                )?;
+                let timestamp = (time.timestamp() as u64) * 1000
+                    + u64::from(time.timestamp_subsec_millis());
 
-                vec![]
+                let size = self.params.symbol.size_tick.convert_unticked(received.size)?;
+                let price = self.params.symbol.price_tick.convert_unticked(received.price)?;
+                let side = self.convert_gdax_side(received.side)?;
+
+                let order_id = received.client_oid.map(|oid| oid.to_owned())
+                    .unwrap_or_else(|| received.order_id.to_owned());
+                
+                let order = OrderReceived {
+                    timestamp,
+                    size,
+                    price,
+                    side,
+                    order_id,
+                };
+
+                self.orders.insert(received.order_id.to_owned(), order.clone());
+
+                vec![Notification::OrderReceived(order)]
             }
 
             "done" => {
@@ -289,7 +306,7 @@ impl HandlerImpl {
                 }
 
                 let order_id = match self.orders.get(done.order_id) {
-                    Some(order) => order.order_id.as_ref().unwrap().to_owned(),
+                    Some(order) => order.order_id.to_owned(),
                     None => return Ok(vec![]),
                 };
 

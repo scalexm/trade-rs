@@ -1,5 +1,5 @@
-use trade::order_book::OrderBook;
-use trade::api::{Order, ApiClient};
+use trade::order_book::{self, OrderBook};
+use trade::api::{OrderReceived, ApiClient};
 use std::collections::HashMap;
 use futures::sync::mpsc::{unbounded, UnboundedSender};
 use std::thread;
@@ -13,7 +13,7 @@ use self::workers::{PullEvent, PushThread, OrderBookThread};
 
 pub struct Prompt {
     pull: mpsc::Receiver<PullEvent>,
-    orders: HashMap<String, Order>,
+    orders: HashMap<String, OrderReceived>,
     output: String,
     order_book: OrderBook,
 }
@@ -54,36 +54,25 @@ impl Prompt {
         match event {
             PullEvent::OrderAck(res) => {
                 match res {
-                    Ok(order) => {
-                        self.output = format!(
-                            "inserted order `{}`",
-                            order.order_id.as_ref().unwrap()
-                        );
-                        self.orders.insert(
-                            order.order_id.as_ref().unwrap().clone(),
-                            order
-                        );
-                    },
-                    Err(err) => self.output = format!("{}", err),
+                    Some(err) => self.output = format!("{}", err),
+                    None => (),
                 }
             },
             PullEvent::CancelAck(res) => {
                 match res {
-                    Ok(cancel) => {
-                        if self.orders.remove(&cancel.order_id).is_none() {
-                            self.output = format!(
-                                "received `CancelAck` for unknown order `{}`",
-                                cancel.order_id
-                            );
-                        } else {
-                            self.output = format!(
-                                "canceled order `{}`",
-                                cancel.order_id
-                            );
-                        }
-                    },
-                    Err(err) => self.output = format!("{}", err),
+                    Some(err) => self.output = format!("{}", err),
+                    None => (),
                 }
+            },
+            PullEvent::OrderReceived(order) => {
+                self.output = format!(
+                    "inserted order `{}`",
+                    order.order_id
+                );
+                self.orders.insert(
+                    order.order_id.clone(),
+                    order
+                );
             },
             PullEvent::OrderUpdate(update) => {
                 if let Some(order) = self.orders.get_mut(&update.order_id) {
@@ -91,7 +80,7 @@ impl Prompt {
                     self.output = format!(
                         "filled order `{}` with quantity {}",
                         update.order_id,
-                        update.consumed_size
+                        order_book::displayable_size(update.consumed_size)
                     );
 
                     if order.size == 0 {
@@ -111,7 +100,7 @@ impl Prompt {
                         expiration.order_id
                     );
                 } else {
-                    self.output = format!("order `{}` has expired", expiration.order_id);
+                    self.output = format!("order `{}` has been canceled", expiration.order_id);
                 }
             }
             PullEvent::OrderBook(order_book) => {
