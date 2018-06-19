@@ -3,6 +3,9 @@ use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request, self};
 use chrono::{Utc, TimeZone};
 use base64;
+use super::errors::RestError;
+use api::errors::ErrorKinded;
+use failure::Fail;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
 struct GdaxOrder<'a> {
@@ -22,8 +25,16 @@ struct GdaxOrderAck<'a> {
 }
 
 impl Client {
-    fn request(&self, endpoint: &str, method: Method, body: String)
-        -> Box<Future<Item = hyper::Chunk, Error = Error> + Send + 'static>
+    fn request<S: Fail>(
+        &self,
+        endpoint: &str,
+        method: Method,
+        body: String
+    ) -> Box<
+            Future<Item = hyper::Chunk, Error = api::errors::ApiError<S>>
+            + Send
+            + 'static
+        > where RestError: ErrorKinded<api::errors::RestErrorKind<S>>
     {
         let keys = self.keys.as_ref().expect(
             "cannot perform an HTTP request without a GDAX key pair"
@@ -56,14 +67,20 @@ impl Client {
         let request = match request {
             Ok(request) => request,
             Err(err) => return Box::new(
-                Err(err).map_err(From::from).into_future()
+                Err(err)
+                    .map_err(api::errors::RequestError::new)
+                    .map_err(api::errors::ApiError::RequestError)
+                    .into_future()
             )
         };
         
         let https = match hyper_tls::HttpsConnector::new(2) {
             Ok(https) => https,
             Err(err) => return Box::new(
-                Err(err).map_err(From::from).into_future()
+                Err(err)
+                    .map_err(api::errors::RequestError::new)
+                    .map_err(api::errors::ApiError::RequestError)
+                    .into_future()
             ),
         };
 
@@ -73,10 +90,16 @@ impl Client {
             res.into_body().concat2().and_then(move |body| {
                 Ok((status, body))
             })
-        }).map_err(From::from).and_then(|(status, body)| {
+        })
+        .map_err(api::errors::RequestError::new)
+        .map_err(api::errors::ApiError::RequestError).and_then(|(status, body)| {
             if status != hyper::StatusCode::OK {
                 let gdax_error = serde_json::from_slice(&body);
-                Err(RestError::from_gdax_error(status, gdax_error.ok()))?;
+                let error = RestError::from_gdax_error(status, gdax_error.ok());
+                let kind = error.kind();
+                Err(
+                    api::errors::ApiError::RestError(error.context(kind).into())
+                )?;
             }
             Ok(body)
         });
@@ -84,7 +107,7 @@ impl Client {
     }
 
     crate fn order_impl(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
+        -> Box<Future<Item = OrderAck, Error = api::errors::OrderError> + Send + 'static>
     {
         let client_oid = order.order_id.clone();
         let time_in_force = order.time_in_force;
@@ -105,12 +128,13 @@ impl Client {
         let order_ids = self.order_ids.clone();
 
         let fut = self.request("orders", Method::POST, body).and_then(move |body| {
-            let ack: GdaxOrderAck = serde_json::from_slice(&body)?;
+            let ack: GdaxOrderAck = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
 
-            let time = Utc.datetime_from_str(
-                    ack.created_at,
-                    "%FT%T.%fZ"
-                )?;
+            let time = Utc.datetime_from_str(ack.created_at, "%FT%T.%fZ")
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
             let timestamp = (time.timestamp() as u64) * 1000
                 + u64::from(time.timestamp_subsec_millis());
 
@@ -129,13 +153,16 @@ impl Client {
     }
 
     crate fn cancel_impl(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
+        -> Box<Future<Item = CancelAck, Error = api::errors::CancelError> + Send + 'static>
     {
         let order_id = match self.order_ids.get(&cancel.order_id) {
             Some(order_id) => order_id,
             None => return Box::new(
-                Err(format_err!("unknown order id: `{}`", cancel.order_id))
-                    .into_future()
+                Err(
+                    format_err!("unknown order id: `{}`", cancel.order_id)
+                        .context(api::errors::RestErrorKind::InvalidRequest)
+                        .into()
+                ).map_err(api::errors::ApiError::RestError).into_future()
             ),
         }.clone();
 

@@ -6,7 +6,7 @@ use ws;
 use serde_json;
 use futures::{prelude::*, sync::mpsc::{unbounded, UnboundedReceiver}};
 use std::sync::mpsc;
-use super::{Client, RestError, Params};
+use super::{Client, errors::RestError, Params};
 use std::borrow::Cow;
 
 impl Client {

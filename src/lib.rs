@@ -7,6 +7,7 @@
 #![feature(crate_visibility_modifier)]
 #![feature(nll)]
 #![feature(try_from)]
+#![feature(never_type)]
 
 extern crate ws;
 extern crate futures;

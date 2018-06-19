@@ -1,5 +1,5 @@
 use trade::*;
-use trade::api::*;
+use trade::api::{self, *};
 use tokio::executor::current_thread;
 use tokio::runtime;
 use futures::prelude::*;
@@ -7,8 +7,8 @@ use futures::sync::mpsc::UnboundedReceiver;
 use std::sync::mpsc;
 
 pub(in prompt) enum PullEvent {
-    OrderAck(Option<Error>),
-    CancelAck(Option<Error>),
+    OrderAck(Option<api::errors::OrderError>),
+    CancelAck(Option<api::errors::CancelError>),
     OrderReceived(OrderReceived),
     OrderUpdate(OrderUpdate),
     OrderExpired(OrderExpired),

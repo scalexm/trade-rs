@@ -2,6 +2,7 @@
 
 pub mod binance;
 pub mod gdax;
+pub mod errors;
 mod params;
 mod wss;
 
@@ -194,13 +195,13 @@ pub trait ApiClient {
 
     /// Send an order to the exchange.
     fn order(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>;
+        -> Box<Future<Item = OrderAck, Error = errors::OrderError> + Send + 'static>;
 
     /// Send a cancel order to the exchange.
     fn cancel(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>;
+        -> Box<Future<Item = CancelAck, Error = errors::CancelError> + Send + 'static>;
 
     /// Send a ping to the exchange.
     fn ping(&self)
-        -> Box<Future<Item = (), Error = Error> + Send + 'static>;
+        -> Box<Future<Item = (), Error = errors::Error> + Send + 'static>;
 }

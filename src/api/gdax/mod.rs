@@ -2,10 +2,10 @@
 
 mod wss;
 mod rest;
+pub mod errors;
 
 use api::*;
 use openssl::pkey::{PKey, Private};
-use hyper::StatusCode;
 use base64;
 use chashmap::CHashMap;
 use std::sync::Arc;
@@ -45,92 +45,6 @@ pub struct Client {
     order_ids: Arc<CHashMap<String, String>>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-struct GdaxRestError<'a> {
-    message: &'a str,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
-/// An error returned by GDAX REST API.
-pub struct RestError {
-    /// Error category.
-    pub category: RestErrorCategory,
-
-    /// Description of the error.
-    pub error_msg: Option<String>,
-}
-
-impl RestError {
-    fn from_gdax_error<'a>(status: StatusCode, gdax_error: Option<GdaxRestError<'a>>)
-        -> Self
-    {
-        RestError {
-            category: RestErrorCategory::from_status_code(status),
-            error_msg: gdax_error.map(|error| error.message.to_owned()),
-        }
-    }
-}
-
-impl std::fmt::Display for RestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.category)?;
-        if let Some(error_msg) = &self.error_msg {
-            write!(f, ": `{}`", error_msg)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Fail)]
-/// Translate an HTTP error code to a GDAX error category.
-pub enum RestErrorCategory {
-    #[fail(display = "bad request")]
-    /// Malformed request, issue on the lib side or consumer side.
-    BadRequest,
-
-    #[fail(display = "unauthorized - invalid API key")]
-    /// The API keys were invalid or did not have the right permissions.
-    Unauthorized,
-
-    #[fail(display = "forbidden")]
-    /// Forbidden.
-    Forbidden,
-
-    #[fail(display = "not found")]
-    /// Not found, issue on the consumer side (e.g. specified order id wasn't found
-    /// by the server when trying to cancel an order).
-    NotFound,
-
-    #[fail(display = "too many requests")]
-    /// The client broke the request rate limit set by GDAX. See GDAX API
-    /// documentation for each request weight and rate limits.
-    TooManyRequests,
-
-    #[fail(display = "internal server error")]
-    /// Issue on GDAX side.
-    InternalError,
-
-    #[fail(display = "unknown")]
-    /// Unknown error.
-    Unknown,
-}
-
-impl RestErrorCategory {
-    fn from_status_code(code: StatusCode) -> Self {
-        use self::RestErrorCategory::*;
-        match code {
-            StatusCode::OK => panic!("`RestError::from_status_code` with `StatusCode::Ok`"),
-            StatusCode::BAD_REQUEST => BadRequest,
-            StatusCode::UNAUTHORIZED => Unauthorized,
-            StatusCode::FORBIDDEN => Forbidden,
-            StatusCode::NOT_FOUND => NotFound,
-            StatusCode::TOO_MANY_REQUESTS => TooManyRequests,
-            StatusCode::INTERNAL_SERVER_ERROR => InternalError,
-            _ => Unknown,
-        }
-    }
-}
-
 impl Client {
     /// Create a new GDAX API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will forward
@@ -165,19 +79,19 @@ impl ApiClient for Client {
     }
 
     fn order(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
+        -> Box<Future<Item = OrderAck, Error = api::errors::OrderError> + Send + 'static>
     {
         self.order_impl(order)
     }
 
     fn cancel(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
+        -> Box<Future<Item = CancelAck, Error = api::errors::CancelError> + Send + 'static>
     {
         self.cancel_impl(cancel)
     }
 
     fn ping(&self)
-        -> Box<Future<Item = (), Error = Error> + Send + 'static>
+        -> Box<Future<Item = (), Error = api::errors::Error> + Send + 'static>
     {
         Box::new(Ok(()).into_future())
     }

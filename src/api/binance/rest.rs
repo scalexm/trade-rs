@@ -3,6 +3,9 @@ use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
 use hex;
 use hyper::{Method, Request, Body};
 use std::fmt;
+use super::errors::RestError;
+use api::errors::ErrorKinded;
+use failure::Fail;
 
 struct QueryString {
     query: String,
@@ -76,8 +79,17 @@ enum Signature {
 }
 
 impl Client {
-    fn request(&self, endpoint: &str, method: Method, query: QueryString, sig: Signature)
-        -> Box<Future<Item = hyper::Chunk, Error = Error> + Send + 'static>
+    fn request<S: Fail>(
+        &self,
+        endpoint: &str,
+        method: Method,
+        query: QueryString,
+        sig: Signature
+    ) -> Box<
+            Future<Item = hyper::Chunk, Error = api::errors::ApiError<S>>
+            + Send
+            + 'static
+        > where RestError: ErrorKinded<api::errors::RestErrorKind<S>>
     {
         let keys = self.keys.as_ref().expect(
             "cannot perform an HTTP request without a binance key pair"
@@ -105,14 +117,20 @@ impl Client {
         let request = match request {
             Ok(request) => request,
             Err(err) => return Box::new(
-                Err(err).map_err(From::from).into_future()
+                Err(err)
+                    .map_err(api::errors::RequestError::new)
+                    .map_err(api::errors::ApiError::RequestError)
+                    .into_future()
             )
         };
         
         let https = match hyper_tls::HttpsConnector::new(2) {
             Ok(https) => https,
             Err(err) => return Box::new(
-                Err(err).map_err(From::from).into_future()
+                Err(err)
+                    .map_err(api::errors::RequestError::new)
+                    .map_err(api::errors::ApiError::RequestError)
+                    .into_future()
             ),
         };
 
@@ -122,10 +140,17 @@ impl Client {
             res.into_body().concat2().and_then(move |body| {
                 Ok((status, body))
             })
-        }).map_err(From::from).and_then(|(status, body)| {
+        })
+        .map_err(api::errors::RequestError::new)
+        .map_err(api::errors::ApiError::RequestError)
+        .and_then(|(status, body)| {
             if status != hyper::StatusCode::OK {
                 let binance_error = serde_json::from_slice(&body);
-                Err(RestError::from_binance_error(status, binance_error.ok()))?;
+                let error = RestError::from_binance_error(status, binance_error.ok());
+                let kind = error.kind();
+                Err(
+                    api::errors::ApiError::RestError(error.context(kind).into())
+                )?;
             }
             Ok(body)
         });
@@ -133,7 +158,7 @@ impl Client {
     }
 
     crate fn order_impl(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = Error> + Send + 'static>
+        -> Box<Future<Item = OrderAck, Error = api::errors::OrderError> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
@@ -161,7 +186,9 @@ impl Client {
         let fut = self.request("api/v3/order", Method::POST, query, Signature::Yes)
             .and_then(|body|
         {
-            let ack: BinanceOrderAck = serde_json::from_slice(&body)?;
+            let ack: BinanceOrderAck = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
             Ok(OrderAck {
                 order_id: ack.clientOrderId.to_owned(),
                 timestamp: ack.transactTime,
@@ -171,7 +198,7 @@ impl Client {
     }
 
     crate fn cancel_impl(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = Error> + Send + 'static>
+        -> Box<Future<Item = CancelAck, Error = api::errors::CancelError> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
@@ -182,7 +209,9 @@ impl Client {
         let fut = self.request("api/v3/order", Method::DELETE, query, Signature::Yes)
             .and_then(|body|
         {
-            let ack: BinanceCancelAck = serde_json::from_slice(&body)?;
+            let ack: BinanceCancelAck = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
             Ok(CancelAck {
                 order_id: ack.origClientOrderId.to_owned(),
             })
@@ -191,20 +220,22 @@ impl Client {
     }
 
     crate fn get_listen_key(&self)
-        -> Box<Future<Item = String, Error = Error> + Send + 'static>
+        -> Box<Future<Item = String, Error = api::errors::Error> + Send + 'static>
     {
         let query = QueryString::new();
         let fut = self.request("api/v1/userDataStream", Method::POST, query, Signature::No)
             .and_then(|body|
         {
-            let key: BinanceListenKey = serde_json::from_slice(&body)?;
+            let key: BinanceListenKey = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
             Ok(key.listenKey.to_owned())
         });
         Box::new(fut)
     }
 
     crate fn ping_impl(&self)
-        -> Box<Future<Item = (), Error = Error> + Send + 'static>
+        -> Box<Future<Item = (), Error = api::errors::Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push(
@@ -221,7 +252,7 @@ impl Client {
 
     /// Retrieve account information for this client.
     pub fn account_information(&self, time_window: u64)
-        -> Box<Future<Item = AccountInformation, Error = Error> + Send + 'static>
+        -> Box<Future<Item = AccountInformation, Error = api::errors::Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("recvWindow", time_window);
@@ -230,7 +261,9 @@ impl Client {
         let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
             .and_then(|body|
         {
-            let info: BinanceAccountInformation = serde_json::from_slice(&body)?;
+            let info: BinanceAccountInformation = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
             Ok(AccountInformation {
                 maker_commission: info.makerCommission,
                 taker_commission: info.takerCommission,

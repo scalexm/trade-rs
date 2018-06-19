@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use futures::sync::mpsc::{unbounded, UnboundedSender};
 use std::thread;
 use std::sync::mpsc;
+use failure::Fail;
 
 mod workers;
 mod draw;
@@ -54,13 +55,13 @@ impl Prompt {
         match event {
             PullEvent::OrderAck(res) => {
                 match res {
-                    Some(err) => self.output = format!("{}", err),
+                    Some(err) => self.output = format!("{}", err.cause().unwrap()),
                     None => (),
                 }
             },
             PullEvent::CancelAck(res) => {
                 match res {
-                    Some(err) => self.output = format!("{}", err),
+                    Some(err) => self.output = format!("{}", err.cause().unwrap()),
                     None => (),
                 }
             },
