@@ -95,4 +95,10 @@ impl ApiClient for Client {
     {
         Box::new(Ok(()).into_future())
     }
+
+    fn new_order_id(_: &str) -> String {
+        use uuid::Uuid;
+
+        Uuid::new_v4().to_string()
+    }
 }

@@ -106,6 +106,10 @@ impl ApiClient for Client {
     {
         self.ping_impl()
     }
+
+    fn new_order_id(hint: &str) -> String {
+        hint.to_owned()
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]

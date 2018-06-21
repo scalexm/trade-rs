@@ -1,5 +1,5 @@
 use trade::{Error, Tick, Side};
-use trade::api::{Order, Cancel, TimeInForce};
+use trade::api::{ApiClient, Order, Cancel, TimeInForce};
 use futures::sync::mpsc::UnboundedSender;
 use std::cell::{RefCell, Cell};
 use prompt::PushEvent;
@@ -16,7 +16,12 @@ pub fn push(push: UnboundedSender<PushEvent>) {
     });
 }
 
-pub fn submit_input(siv: &mut Cursive, content: &str, price_tick: Tick, size_tick: Tick) {
+pub fn submit_input<C: ApiClient>(
+    siv: &mut Cursive,
+    content: &str,
+    price_tick: Tick,
+    size_tick: Tick
+) {
     let args: Vec<_> = content.split(' ').collect();
 
     if args.is_empty() {
@@ -30,7 +35,7 @@ pub fn submit_input(siv: &mut Cursive, content: &str, price_tick: Tick, size_tic
         return;
     }
 
-    if let Err(err) = process_input(cmd, &args[1..], price_tick, size_tick) {
+    if let Err(err) = process_input::<C>(cmd, &args[1..], price_tick, size_tick) {
         PUSH.with(|cell| {
             let msg = format!("{}", err);
             cell.borrow()
@@ -42,7 +47,7 @@ pub fn submit_input(siv: &mut Cursive, content: &str, price_tick: Tick, size_tic
     }
 }
 
-fn process_input(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
+fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
     -> Result<(), Error>
 {
     match cmd {
@@ -69,7 +74,7 @@ fn process_input(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
 
             let mut order_id = None;
             if args.len() == 4 {
-                order_id = Some(args[3].to_owned());
+                order_id = Some(C::new_order_id(&args[3]));
             }
 
             let order = Order {

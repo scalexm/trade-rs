@@ -34,14 +34,14 @@ fn build_siv() -> Cursive {
     siv
 }
 
-fn draw_input_line(siv: &mut Cursive, price_tick: Tick, size_tick: Tick) {
+fn draw_input_line<C: ApiClient>(siv: &mut Cursive, price_tick: Tick, size_tick: Tick) {
     siv.add_layer(
         EditView::new()
             .filler(" ")
             .on_submit(move |siv, content| {
-                input::submit_input(siv, content, price_tick, size_tick);
+                input::submit_input::<C>(siv, content, price_tick, size_tick);
                 siv.pop_layer();
-                draw_input_line(siv, price_tick, size_tick);
+                draw_input_line::<C>(siv, price_tick, size_tick);
             }).full_width()
     );
     siv.reposition_layer(
@@ -58,7 +58,7 @@ fn run<C: ApiClient + Send + 'static>(client: C, price_tick: Tick, size_tick: Ti
 
     siv.add_layer(prompt.full_screen());
 
-    draw_input_line(&mut siv, price_tick, size_tick);
+    draw_input_line::<C>(&mut siv, price_tick, size_tick);
     siv.run();
 }
 

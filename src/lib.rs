@@ -25,6 +25,7 @@ extern crate hex;
 extern crate chrono;
 extern crate base64;
 extern crate chashmap;
+extern crate uuid;
 
 pub mod matching_engine;
 pub mod api;

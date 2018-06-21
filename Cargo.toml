@@ -22,6 +22,10 @@ chrono = "^0.4"
 base64 = "^0.9"
 chashmap = "2.2.0"
 
+[dependencies.uuid]
+version = "^0.6"
+features = ["v4"]
+
 [dependencies.ws]
 version = "^0.7"
 features = ["ssl"]
