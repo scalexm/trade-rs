@@ -107,7 +107,7 @@ impl Client {
     }
 
     crate fn order_impl(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = api::errors::OrderError> + Send + 'static>
+        -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
         let client_oid = order.order_id.clone();
         let time_in_force = order.time_in_force;
@@ -146,14 +146,13 @@ impl Client {
 
             Ok(OrderAck {
                 order_id: order_id,
-                timestamp,
-            })
+            }.with_timestamp(timestamp))
         });
         Box::new(fut)
     }
 
     crate fn cancel_impl(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = api::errors::CancelError> + Send + 'static>
+        -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
         let order_id = match self.order_ids.get(&cancel.order_id) {
             Some(order_id) => order_id,
@@ -171,7 +170,7 @@ impl Client {
         {
             Ok(CancelAck {
                 order_id,
-            })
+            }.timestamped())
         });
         Box::new(fut)
     }

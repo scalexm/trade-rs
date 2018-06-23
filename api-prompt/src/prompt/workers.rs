@@ -9,9 +9,9 @@ use std::sync::mpsc;
 pub(in prompt) enum PullEvent {
     OrderAck(Option<api::errors::OrderError>),
     CancelAck(Option<api::errors::CancelError>),
-    OrderReceived(OrderReceived),
+    OrderConfirmation(OrderConfirmation),
     OrderUpdate(OrderUpdate),
-    OrderExpired(OrderExpired),
+    OrderExpiration(OrderExpiration),
     OrderBook(OrderBook),
     Message(String),
 }
@@ -77,18 +77,18 @@ impl<S: Stream<Item = Notification, Error = ()>> OrderBookThread<S> {
         match notif {
             Notification::LimitUpdates(updates) => {
                 for update in updates {
-                    self.order_book.update(update);
+                    self.order_book.update(update.into_inner());
                 }
                 self.pull.send(PullEvent::OrderBook(self.order_book.clone())).unwrap();
             },
-            Notification::OrderReceived(received) => {
-                self.pull.send(PullEvent::OrderReceived(received)).unwrap();
+            Notification::OrderConfirmation(order) => {
+                self.pull.send(PullEvent::OrderConfirmation(order.into_inner())).unwrap();
             },
             Notification::OrderUpdate(update) => {
-                self.pull.send(PullEvent::OrderUpdate(update)).unwrap();
+                self.pull.send(PullEvent::OrderUpdate(update.into_inner())).unwrap();
             },
-            Notification::OrderExpired(expiration) => {
-                self.pull.send(PullEvent::OrderExpired(expiration)).unwrap();
+            Notification::OrderExpiration(expiration) => {
+                self.pull.send(PullEvent::OrderExpiration(expiration.into_inner())).unwrap();
             },
             _ => (),
         }

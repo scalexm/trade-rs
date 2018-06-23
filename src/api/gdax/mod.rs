@@ -79,21 +79,21 @@ impl ApiClient for Client {
     }
 
     fn order(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = api::errors::OrderError> + Send + 'static>
+        -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
         self.order_impl(order)
     }
 
     fn cancel(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = api::errors::CancelError> + Send + 'static>
+        -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
         self.cancel_impl(cancel)
     }
 
     fn ping(&self)
-        -> Box<Future<Item = (), Error = api::errors::Error> + Send + 'static>
+        -> Box<Future<Item = Timestamped<()>, Error = api::errors::Error> + Send + 'static>
     {
-        Box::new(Ok(()).into_future())
+        Box::new(Ok(().timestamped()).into_future())
     }
 
     fn new_order_id(_: &str) -> String {

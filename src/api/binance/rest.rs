@@ -158,7 +158,7 @@ impl Client {
     }
 
     crate fn order_impl(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = api::errors::OrderError> + Send + 'static>
+        -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
@@ -191,14 +191,13 @@ impl Client {
                 .map_err(api::errors::ApiError::RequestError)?;
             Ok(OrderAck {
                 order_id: ack.clientOrderId.to_owned(),
-                timestamp: ack.transactTime,
-            })
+            }.with_timestamp(ack.transactTime))
         });
         Box::new(fut)
     }
 
     crate fn cancel_impl(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = api::errors::CancelError> + Send + 'static>
+        -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
@@ -214,7 +213,7 @@ impl Client {
                 .map_err(api::errors::ApiError::RequestError)?;
             Ok(CancelAck {
                 order_id: ack.origClientOrderId.to_owned(),
-            })
+            }.timestamped())
         });
         Box::new(fut)
     }
@@ -235,7 +234,7 @@ impl Client {
     }
 
     crate fn ping_impl(&self)
-        -> Box<Future<Item = (), Error = api::errors::Error> + Send + 'static>
+        -> Box<Future<Item = Timestamped<()>, Error = api::errors::Error> + Send + 'static>
     {
         let mut query = QueryString::new();
         query.push(
@@ -246,7 +245,7 @@ impl Client {
         );
 
         let fut = self.request("api/v1/userDataStream", Method::PUT, query, Signature::No)
-            .and_then(|_| Ok(()));
+            .and_then(|_| Ok(().timestamped()));
         Box::new(fut)
     }
 

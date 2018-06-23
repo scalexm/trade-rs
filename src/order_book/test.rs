@@ -3,12 +3,7 @@
 use order_book::*;
 
 fn lu(price: Price, size: Size, side: Side) -> LimitUpdate {
-    LimitUpdate {
-        timestamp: 0,
-        price,
-        size,
-        side,
-    }
+    LimitUpdate::new(price, size, side)
 }
 
 #[test]
@@ -27,9 +22,6 @@ fn test_diff() {
     odb2.update(lu(77, 4, Side::Bid));
 
     let mut diff = odb1.diff(&odb2);
-    for u in &mut diff {
-        u.timestamp = 0;
-    }
     diff.sort_by(|x, y| x.price.cmp(&y.price));
 
     assert_eq!(

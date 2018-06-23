@@ -46,7 +46,7 @@ struct HandlerImpl {
     keys: Option<Keys>,
 
     // server order id => client order
-    orders: HashMap<String, OrderReceived>,
+    orders: HashMap<String, OrderConfirmation>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
@@ -137,7 +137,7 @@ struct EventType<'a> {
 }
 
 impl HandlerImpl {
-    fn convert_gdax_update(&self, l: (&str, &str), side: Side, timestamp: u64)
+    fn convert_gdax_update(&self, l: (&str, &str), side: Side)
         -> Result<LimitUpdate, ConversionError>
     {
         Ok(
@@ -145,7 +145,6 @@ impl HandlerImpl {
                 side,
                 price: self.params.symbol.price_tick.convert_unticked(l.0)?,
                 size: self.params.symbol.size_tick.convert_unticked(l.1)?,
-                timestamp,
             }
         )
     }
@@ -174,18 +173,16 @@ impl HandlerImpl {
 
             "snapshot" => {
                 let snapshot: GdaxBookSnapshot = serde_json::from_str(json)?;
-                let timestamp = timestamp_ms();
 
                 let bid = snapshot.bids
                     .into_iter()
-                    .map(|(price, size)| {
-                        self.convert_gdax_update((price, size), Side::Bid, timestamp)
-                    });
+                    .map(|(price, size)| self.convert_gdax_update((price, size), Side::Bid))
+                    .map(|l| Ok(l?.timestamped()));
+
                 let ask = snapshot.asks
                     .into_iter()
-                    .map(|(price, size)| {
-                        self.convert_gdax_update((price, size), Side::Ask, timestamp)
-                    });
+                    .map(|(price, size)| self.convert_gdax_update((price, size), Side::Ask))
+                    .map(|l| Ok(l?.timestamped()));
                 
                 vec![
                     Notification::LimitUpdates(
@@ -196,14 +193,14 @@ impl HandlerImpl {
 
             "l2update" => {
                 let update: GdaxLimitUpdate = serde_json::from_str(json)?;
-                let timestamp = timestamp_ms();
 
                 let updates = update.changes
                     .into_iter()
                     .map(|(side, price, size)| {
                         let side = self.convert_gdax_side(side)?;
-                        Ok(self.convert_gdax_update((price, size), side, timestamp)?)
-                    });
+                        Ok(self.convert_gdax_update((price, size), side)?)
+                    })
+                    .map(|l: Result<_, Error>| Ok(l?.timestamped()));
                 vec![
                     Notification::LimitUpdates(
                         updates.collect::<Result<Vec<_>, Error>>()?
@@ -227,18 +224,17 @@ impl HandlerImpl {
 
                 // An order which is about us
                 if trade.profile_id.is_some() {
-                    let mut update_order = |order: &mut OrderReceived| {
+                    let mut update_order = |order: &mut OrderConfirmation| {
                         order.size -= size;
 
                         notifs.push(
                             Notification::OrderUpdate(OrderUpdate {
-                                timestamp,
                                 order_id: order.order_id.clone(),
                                 consumed_size: size,
                                 consumed_price: price,
                                 remaining_size: order.size,
                                 commission: 0,
-                            })
+                            }.with_timestamp(timestamp))
                         );
                     };
 
@@ -256,8 +252,7 @@ impl HandlerImpl {
                         size,
                         price,
                         maker_side: self.convert_gdax_side(trade.side)?,
-                        timestamp,
-                    })
+                    }.with_timestamp(timestamp))
                 );
 
                 notifs
@@ -279,8 +274,7 @@ impl HandlerImpl {
                 let order_id = received.client_oid.map(|oid| oid.to_owned())
                     .unwrap_or_else(|| received.order_id.to_owned());
                 
-                let order = OrderReceived {
-                    timestamp,
+                let order = OrderConfirmation {
                     size,
                     price,
                     side,
@@ -289,7 +283,7 @@ impl HandlerImpl {
 
                 self.orders.insert(received.order_id.to_owned(), order.clone());
 
-                vec![Notification::OrderReceived(order)]
+                vec![Notification::OrderConfirmation(order.with_timestamp(timestamp))]
             }
 
             "done" => {
@@ -310,10 +304,9 @@ impl HandlerImpl {
                     None => return Ok(vec![]),
                 };
 
-                vec![Notification::OrderExpired(OrderExpired {
-                    timestamp,
+                vec![Notification::OrderExpiration(OrderExpiration {
                     order_id,
-                })]
+                }.with_timestamp(timestamp))]
             }
 
             "error" => {

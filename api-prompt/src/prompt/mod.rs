@@ -1,5 +1,5 @@
 use trade::order_book::{self, OrderBook};
-use trade::api::{OrderReceived, ApiClient};
+use trade::api::{OrderConfirmation, ApiClient};
 use std::collections::HashMap;
 use futures::sync::mpsc::{unbounded, UnboundedSender};
 use std::thread;
@@ -14,7 +14,7 @@ use self::workers::{PullEvent, PushThread, OrderBookThread};
 
 pub struct Prompt {
     pull: mpsc::Receiver<PullEvent>,
-    orders: HashMap<String, OrderReceived>,
+    orders: HashMap<String, OrderConfirmation>,
     output: String,
     order_book: OrderBook,
 }
@@ -65,7 +65,7 @@ impl Prompt {
                     None => (),
                 }
             },
-            PullEvent::OrderReceived(order) => {
+            PullEvent::OrderConfirmation(order) => {
                 self.output = format!(
                     "inserted order `{}`",
                     order.order_id
@@ -94,10 +94,10 @@ impl Prompt {
                     );
                 }
             },
-            PullEvent::OrderExpired(expiration) => {
+            PullEvent::OrderExpiration(expiration) => {
                 if self.orders.remove(&expiration.order_id).is_none() {
                     self.output = format!(
-                        "received `OrderExpired` for unknown order `{}`",
+                        "received `OrderExpiration` for unknown order `{}`",
                         expiration.order_id
                     );
                 } else {

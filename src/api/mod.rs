@@ -9,8 +9,57 @@ mod wss;
 use crate::*;
 use order_book::LimitUpdate;
 use futures::prelude::*;
+use std::ops::Deref;
 
 pub use self::params::*;
+
+pub type Timestamp = u64;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize, Serialize)]
+/// Wrapper around a type carrying an additionnal timestamp. Deref to `T`.
+pub struct Timestamped<T> {
+    timestamp: Timestamp,
+    #[serde(flatten)]
+    inner: T,
+}
+
+impl<T> Timestamped<T> {
+    /// Registered timestamp.
+    pub fn timestamp(&self) -> Timestamp {
+        self.timestamp
+    }
+
+    /// Return the wrapped value.
+    pub fn into_inner(self) -> T {
+        self.inner
+    }
+}
+
+impl<T> Deref for Timestamped<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+trait IntoTimestamped: Sized {
+    fn timestamped(self) -> Timestamped<Self> {
+        Timestamped {
+            timestamp: timestamp_ms(),
+            inner: self,
+        }
+    }
+
+    fn with_timestamp(self, timestamp: Timestamp) -> Timestamped<Self> {
+        Timestamped {
+            timestamp,
+            inner: self,
+        }
+    }
+}
+
+impl<T: Sized> IntoTimestamped for T { }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// See https://www.investopedia.com/terms/t/timeinforce.asp.
@@ -46,28 +95,19 @@ impl AsStr for TimeInForce {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to be sent through the API.
 pub struct Order {
-    /// Order price.
-    pub price: Price,
-
-    /// Order size.
-    pub size: Size,
-
-    /// Order side: `Bid` / buy or `Ask`/ sell.
-    pub side: Side,
-
-    /// Time in force, see https://www.investopedia.com/terms/t/timeinforce.asp.
-    pub time_in_force: TimeInForce,
-
-    /// Delay until the order becomes invalid if not treated by the server, in ms.
-    /// Unusable on gdax, the exchange forces the time window to be 30s.
-    pub time_window: u64,
-
-    /// Unique id used to identify this order, stringified.
-    /// Automatically generated if `None`.
-    pub order_id: Option<String>,
+    price: Price,
+    size: Size,
+    side: Side,
+    time_in_force: TimeInForce,
+    time_window: u64,
+    order_id: Option<String>,
 }
 
 impl Order {
+    /// Return a new `Order`, with:
+    /// * `price` being the order price
+    /// * `size` being the order size
+    /// * `side` being `Side::Bid` (buy) or `Side::Ask` (sell)
     pub fn new(price: Price, size: Size, side: Side) -> Self {
         Order {
             price,
@@ -79,11 +119,20 @@ impl Order {
         }
     }
 
+    /// Time in force, see https://www.investopedia.com/terms/t/timeinforce.asp.
+    pub fn time_in_force(mut self, time_in_force: TimeInForce) -> Self {
+        self.time_in_force = time_in_force;
+        self
+    }
+
+    /// Delay until the order becomes invalid if not treated by the server, in ms.
+    /// Unusable on gdax, the exchange forces the time window to be 30s.
     pub fn time_window(mut self, time_window: u64) -> Self {
         self.time_window = time_window;
         self
     }
 
+    /// Unique id used to identify this order. Automatically generated if not specified.
     pub fn order_id(mut self, order_id: String) -> Self {
         self.order_id = Some(order_id);
         self
@@ -93,14 +142,12 @@ impl Order {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to cancel a previous order.
 pub struct Cancel {
-    /// Identify the order to cancel.
-    pub order_id: String,
-
-    /// Delay until the cancel order becomes invalid if not treated by the server, in ms.
-    pub time_window: u64,
+    order_id: String,
+    time_window: u64,
 }
 
 impl Cancel {
+    /// Return a new `Cancel`, with `order_id` identifying the order to cancel.
     pub fn new(order_id: String) -> Self {
         Cancel {
             order_id,
@@ -108,6 +155,8 @@ impl Cancel {
         }
     }
 
+    /// Delay until the cancel order becomes invalid if not treated by the server, in ms.
+    /// Unusable on gdax, the exchange forces the time window to be 30s.
     pub fn time_window(mut self, time_window: u64) -> Self {
         self.time_window = time_window;
         self
@@ -117,9 +166,6 @@ impl Cancel {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An acknowledgment that an order has been treated by the server.
 pub struct OrderAck {
-    /// Timestamp at which the order was treated, in ms.
-    pub timestamp: u64,
-
     /// ID identifiying the order.
     pub order_id: String,
 }
@@ -134,9 +180,6 @@ pub struct CancelAck {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A notification that some order has been updated, i.e. a trade crossed through this order.
 pub struct OrderUpdate {
-    /// Timestamp at which the update happened, in ms.
-    pub timestamp: u64,
-
     /// ID identifying the order being updated.
     pub order_id: String,
 
@@ -158,9 +201,6 @@ pub struct OrderUpdate {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A liquidity consuming order.
 pub struct Trade {
-    // Trade timestamp, in ms.
-    pub timestamp: u64,
-
     /// Price in ticks.
     pub price: Price,
 
@@ -177,20 +217,14 @@ pub struct Trade {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A notification that some order has expired or was canceled.
-pub struct OrderExpired {
-    /// Expiration timestamp, in ms.
-    pub timestamp: u64,
-
+pub struct OrderExpiration {
     /// Expired order.
     pub order_id: String,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A notification that some order has been received by the exchange.
-pub struct OrderReceived {
-    /// Timestamp at which the order was received.
-    pub timestamp: u64,
-
+pub struct OrderConfirmation {
     /// Unique order id.
     pub order_id: String,
 
@@ -208,18 +242,18 @@ pub struct OrderReceived {
 /// A notification that some event happened.
 pub enum Notification {
     /// A trade was executed.
-    Trade(Trade),
+    Trade(Timestamped<Trade>),
 
     /// The limit order book has changed and should be updated.
-    LimitUpdates(Vec<LimitUpdate>),
+    LimitUpdates(Vec<Timestamped<LimitUpdate>>),
 
-    OrderReceived(OrderReceived),
+    OrderConfirmation(Timestamped<OrderConfirmation>),
 
     /// An order has been updated.
-    OrderUpdate(OrderUpdate),
+    OrderUpdate(Timestamped<OrderUpdate>),
 
     /// An order has expired or was canceled.
-    OrderExpired(OrderExpired),
+    OrderExpiration(Timestamped<OrderExpiration>),
 }
 
 /// A trait implemented by clients of various exchanges API.
@@ -233,15 +267,15 @@ pub trait ApiClient {
 
     /// Send an order to the exchange.
     fn order(&self, order: &Order)
-        -> Box<Future<Item = OrderAck, Error = errors::OrderError> + Send + 'static>;
+        -> Box<Future<Item = Timestamped<OrderAck>, Error = errors::OrderError> + Send + 'static>;
 
     /// Send a cancel order to the exchange.
     fn cancel(&self, cancel: &Cancel)
-        -> Box<Future<Item = CancelAck, Error = errors::CancelError> + Send + 'static>;
+        -> Box<Future<Item = Timestamped<CancelAck>, Error = errors::CancelError> + Send + 'static>;
 
     /// Send a ping to the exchange.
     fn ping(&self)
-        -> Box<Future<Item = (), Error = errors::Error> + Send + 'static>;
+        -> Box<Future<Item = Timestamped<()>, Error = errors::Error> + Send + 'static>;
 
     /// Generate an order id. When possible, the result will be equal to `hint`, otherwise
     /// it is assured that all strings generated by a call to this method are distinct.

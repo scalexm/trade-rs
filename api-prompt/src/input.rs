@@ -72,19 +72,13 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                 other => bail!("expected time in force, got `{}`", other),
             };
 
-            let mut order_id = None;
+            let mut order = Order::new(price, size, side)
+                .time_in_force(time_in_force)
+                .time_window(TIME_WINDOW.with(|cell| cell.get()));
+            
             if args.len() == 4 {
-                order_id = Some(C::new_order_id(&args[3]));
+                order = order.order_id(C::new_order_id(&args[3]));
             }
-
-            let order = Order {
-                side,
-                size,
-                price,
-                time_in_force,
-                order_id,
-                time_window: TIME_WINDOW.with(|cell| cell.get()),
-            };
 
             PUSH.with(move |cell| {
                 cell.borrow()
@@ -99,10 +93,8 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                 bail!("wrong number of arguments");
             }
             
-            let cancel = Cancel {
-                order_id: args[0].to_string(),
-                time_window: TIME_WINDOW.with(|cell| cell.get()),
-            };
+            let cancel = Cancel::new(args[0].to_string())
+                .time_window(TIME_WINDOW.with(|cell| cell.get()));
 
             PUSH.with(move |cell| {
                 cell.borrow()

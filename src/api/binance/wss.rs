@@ -45,7 +45,7 @@ impl Client {
 /// Internal representation which keeps binance `u` indicator.
 struct LimitUpdates {
     u: u64,
-    updates: Vec<LimitUpdate>,
+    updates: Vec<Timestamped<LimitUpdate>>,
 }
 
 type BookReceiver = mpsc::Receiver<Result<BinanceBookSnapshot<'static>, Error>>;
@@ -166,7 +166,7 @@ struct EventType<'a> {
 impl HandlerImpl {
     /// Utility function for converting a `BinanceLimitUpdate` into a `LimitUpdate` (with
     /// conversion in ticks and so on).
-    fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side, timestamp: u64)
+    fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side)
         -> Result<LimitUpdate, ConversionError>
     {
         Ok(
@@ -174,7 +174,6 @@ impl HandlerImpl {
                 side,
                 price: self.params.symbol.price_tick.convert_unticked(&l.price)?,
                 size: self.params.symbol.size_tick.convert_unticked(&l.size)?,
-                timestamp,
             }
         )
     }
@@ -189,16 +188,14 @@ impl HandlerImpl {
                 Some(
                     Notification::Trade(Trade {
                         size: self.params.symbol.size_tick.convert_unticked(trade.q)?,
-                        timestamp: trade.T,
                         price: self.params.symbol.price_tick.convert_unticked(trade.p)?,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
-                    })
+                    }.with_timestamp(trade.T))
                 )
             },
 
             "depthUpdate" => {
                 let depth_update: BinanceDepthUpdate = serde_json::from_str(json)?;
-                let time = depth_update.E;
 
                 // The order is consistent if the previous `u + 1` is equal to current `U`.
                 if let Some(previous_u) = self.previous_u {
@@ -210,11 +207,13 @@ impl HandlerImpl {
                 self.previous_u = Some(depth_update.u);
 
                 let bid = depth_update.b
-                                      .iter()
-                                      .map(|l| self.convert_binance_update(l, Side::Bid, time));
+                    .iter()
+                    .map(|l| self.convert_binance_update(l, Side::Bid))
+                    .map(|l| Ok(l?.with_timestamp(depth_update.E)));
                 let ask = depth_update.a
-                                      .iter()
-                                      .map(|l| self.convert_binance_update(l, Side::Ask, time));
+                    .iter()
+                    .map(|l| self.convert_binance_update(l, Side::Ask))
+                    .map(|l| Ok(l?.with_timestamp(depth_update.E)));
 
                 Some(
                     Notification::LimitUpdates(
@@ -228,7 +227,7 @@ impl HandlerImpl {
 
                 match report.x.as_ref() {
                     "NEW" => Some(
-                        Notification::OrderReceived(OrderReceived {
+                        Notification::OrderConfirmation(OrderConfirmation {
                             order_id: report.c.to_owned(),
                             size: self.params.symbol.size_tick
                                 .convert_unticked(report.q)?,
@@ -239,8 +238,7 @@ impl HandlerImpl {
                                 "SELL" => Side::Ask,
                                 other => bail!("wrong side `{}`", other),
                             },
-                            timestamp: report.T,
-                        })
+                        }.with_timestamp(report.T))
                     ),
                     
                     "TRADE" => Some(
@@ -262,16 +260,13 @@ impl HandlerImpl {
 
                             commission: self.params.symbol.commission_tick
                                 .convert_unticked(report.n)?,
-
-                            timestamp: report.T,
-                        })
+                        }.with_timestamp(report.T))
                     ),
 
                     "EXPIRED" | "CANCELED" => Some(
-                        Notification::OrderExpired(OrderExpired {
-                            timestamp: report.T,
+                        Notification::OrderExpiration(OrderExpiration {
                             order_id: report.c.to_owned(),
-                        })
+                        }.with_timestamp(report.T))
                     ),
 
                     // "REJECTED" should already be handled by the REST API.
@@ -291,15 +286,16 @@ impl HandlerImpl {
     ) -> Result<Notification, Error>
     {
         let snapshot = snapshot?;
-        let time = timestamp_ms();
 
         let bid = snapshot.bids
-                          .iter()
-                          .map(|l| self.convert_binance_update(l, Side::Bid, time));
+            .iter()
+            .map(|l| self.convert_binance_update(l, Side::Bid))
+            .map(|l| Ok(l?.timestamped()));
 
         let ask = snapshot.asks
-                          .iter()
-                          .map(|l| self.convert_binance_update(l, Side::Ask, time));
+            .iter()
+            .map(|l| self.convert_binance_update(l, Side::Ask))
+            .map(|l| Ok(l?.timestamped()));
 
         let buffered = buffered_events
             .into_iter()
@@ -349,7 +345,7 @@ impl HandlerImpl {
         }
     }
 
-    fn request_book_snapshot(&mut self, updates: Vec<LimitUpdate>) {
+    fn request_book_snapshot(&mut self, updates: Vec<Timestamped<LimitUpdate>>) {
         let (snd, rcv) = mpsc::channel();
 
         self.book_snapshot_state = BookSnapshotState::Waiting(

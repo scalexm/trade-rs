@@ -18,9 +18,6 @@ pub struct OrderBook {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Represent a limit update of the order book.
 pub struct LimitUpdate {
-    /// Timestamp at which the update happened, in ms.
-    pub timestamp: u64,
-
     /// Price of the corresponding limit.
     pub price: Price,
 
@@ -29,6 +26,16 @@ pub struct LimitUpdate {
 
     /// Side of the corresponding limit.
     pub side: Side,
+}
+
+impl LimitUpdate {
+    pub fn new(price: Price, size: Size, side: Side) -> Self {
+        LimitUpdate {
+            price,
+            size,
+            side,
+        }
+    }
 }
 
 impl OrderBook {
@@ -120,7 +127,6 @@ impl OrderBook {
     pub fn diff(&self, other: &OrderBook) -> Vec<LimitUpdate> {
         use std::collections::HashMap;
 
-        let timestamp = timestamp_ms();
         let mut updates = Vec::new();
 
         let mut compute_diff = |entries: &BTreeMap<_, _>, other_entries, side| {
@@ -133,22 +139,12 @@ impl OrderBook {
                 };
 
                 if need_update {
-                    updates.push(LimitUpdate {
-                        timestamp,
-                        price,
-                        size: other_size,
-                        side,
-                    });
+                    updates.push(LimitUpdate::new(price, other_size, side));
                 }
             }
 
             for (price, _) in entries {
-                updates.push(LimitUpdate {
-                    timestamp,
-                    price,
-                    size: 0,
-                    side,
-                });
+                updates.push(LimitUpdate::new(price, 0, side));
             }
         };
 
