@@ -55,13 +55,29 @@ impl Prompt {
         match event {
             PullEvent::OrderAck(res) => {
                 match res {
-                    Some(err) => self.output = format!("{}", err.cause().unwrap()),
+                    Some(err) => {
+                        let cause = err.cause().unwrap();
+                        match cause.cause() {
+                            Some(inner_cause) => {
+                                self.output = format!("{} ({})", cause, inner_cause)
+                            },
+                            None => self.output = format!("{}", cause),
+                        }
+                    },
                     None => (),
                 }
             },
             PullEvent::CancelAck(res) => {
                 match res {
-                    Some(err) => self.output = format!("{}", err.cause().unwrap()),
+                    Some(err) => {
+                        let cause = err.cause().unwrap();
+                        match cause.cause() {
+                            Some(inner_cause) => {
+                                self.output = format!("{} ({})", cause, inner_cause)
+                            },
+                            None => self.output = format!("{}", cause),
+                        }
+                    },
                     None => (),
                 }
             },

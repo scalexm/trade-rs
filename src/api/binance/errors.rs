@@ -28,24 +28,24 @@ impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
             self.error_code == Some(-1003) ||
             self.error_code == Some(-1015)
         {
-            return api::errors::RestErrorKind::TooManyRequests
+            return api::errors::RestErrorKind::TooManyRequests;
         }
 
         if self.kind == RestErrorKind::Timeout ||
             self.error_code == Some(-1007) ||
             self.error_code == Some(-1006)
         {
-            return api::errors::RestErrorKind::UnknownStatus
+            return api::errors::RestErrorKind::UnknownStatus;
         }
 
         if self.error_code == Some(-1021) {
-            return api::errors::RestErrorKind::OutsideTimeWindow
+            return api::errors::RestErrorKind::OutsideTimeWindow;
         }
 
         if self.kind == RestErrorKind::InternalError ||
             self.error_code == Some(-1001)
         {
-            return api::errors::RestErrorKind::OtherSide
+            return api::errors::RestErrorKind::OtherSide;
         }
         
         api::errors::RestErrorKind::InvalidRequest

@@ -46,7 +46,7 @@ impl Client {
             endpoint,
         );
 
-        let timestamp = (timestamp_ms() as f64) / 1000.;
+        let timestamp = timestamp_ms() as f64 / 1000.;
 
         let mut signer = Signer::new(MessageDigest::sha256(), &keys.secret_key).unwrap();
         let what = format!("{}{}/{}{}", timestamp, method, endpoint, body);
@@ -159,7 +159,9 @@ impl Client {
             None => return Box::new(
                 Err(
                     format_err!("unknown order id: `{}`", cancel.order_id)
-                        .context(api::errors::RestErrorKind::InvalidRequest)
+                        .context(api::errors::RestErrorKind::Specific(
+                            api::errors::CancelErrorKind::UnknownOrder
+                        ))
                         .into()
                 ).map_err(api::errors::ApiError::RestError).into_future()
             ),

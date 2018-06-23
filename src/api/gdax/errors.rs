@@ -20,15 +20,23 @@ pub struct RestError {
 impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<!> {
         if self.kind == RestErrorKind::TooManyRequests {
-            return api::errors::RestErrorKind::TooManyRequests
+            return api::errors::RestErrorKind::TooManyRequests;
         }
 
         if self.kind == RestErrorKind::Timeout {
-            return api::errors::RestErrorKind::UnknownStatus
+            return api::errors::RestErrorKind::UnknownStatus;
         }
 
         if self.kind == RestErrorKind::InternalError {
-            return api::errors::RestErrorKind::OtherSide
+            return api::errors::RestErrorKind::OtherSide;
+        }
+
+        if self.error_msg
+            .as_ref()
+            .map(|msg| msg.starts_with("request timestamp expired"))
+            .unwrap_or(false)
+        {
+            return api::errors::RestErrorKind::OutsideTimeWindow;
         }
         
         api::errors::RestErrorKind::InvalidRequest
@@ -37,14 +45,26 @@ impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
 
 impl ErrorKinded<api::errors::RestErrorKind<api::errors::CancelErrorKind>> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::CancelErrorKind> {
-        // FIXME: parse error message
+        if self.kind == RestErrorKind::NotFound {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::CancelErrorKind::UnknownOrder
+            );
+        }
         <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
     }
 }
 
 impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::OrderErrorKind> {
-        // FIXME: parse error message
+        if self.error_msg
+            .as_ref()
+            .map(|msg| msg.starts_with("Insufficient funds"))
+            .unwrap_or(false)
+        {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::OrderErrorKind::InsufficientBalance
+            );
+        }
         <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
     }
 }
