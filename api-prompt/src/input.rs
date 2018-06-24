@@ -77,7 +77,7 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                 .time_window(TIME_WINDOW.with(|cell| cell.get()));
             
             if args.len() == 4 {
-                order = order.order_id(C::new_order_id(&args[3]));
+                order = order.order_id::<C>(&args[3]);
             }
 
             PUSH.with(move |cell| {

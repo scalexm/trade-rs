@@ -95,7 +95,9 @@ impl ApiClient for Client {
     {
         Box::new(Ok(().timestamped()).into_future())
     }
+}
 
+impl GenerateOrderId for Client {
     fn new_order_id(_: &str) -> String {
         use uuid::Uuid;
 

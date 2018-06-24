@@ -109,6 +109,11 @@ impl Client {
     crate fn order_impl(&self, order: &Order)
         -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
+        // Note that GDAX only accepts custom client ids in the form of UUIDs, so there can
+        // never be duplicate orders inserted in the `order_ids` map. This is actually quite
+        // neat because checking for duplicate orders in a synchronized manner would have been
+        // difficult otherwise.
+
         let client_oid = order.order_id.clone();
         let time_in_force = order.time_in_force;
 
@@ -158,11 +163,9 @@ impl Client {
             Some(order_id) => order_id,
             None => return Box::new(
                 Err(
-                    format_err!("unknown order id: `{}`", cancel.order_id)
-                        .context(api::errors::RestErrorKind::Specific(
-                            api::errors::CancelErrorKind::UnknownOrder
-                        ))
-                        .into()
+                    api::errors::RestErrorKind::Specific(
+                        api::errors::CancelErrorKind::UnknownOrder
+                    ).into()
                 ).map_err(api::errors::ApiError::RestError).into_future()
             ),
         }.clone();

@@ -106,7 +106,9 @@ impl ApiClient for Client {
     {
         self.ping_impl()
     }
+}
 
+impl GenerateOrderId for Client {
     fn new_order_id(hint: &str) -> String {
         hint.to_owned()
     }
