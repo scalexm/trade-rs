@@ -150,7 +150,7 @@ impl Client {
             order_ids.insert(order_id.clone(), ack.id.to_owned());
 
             Ok(OrderAck {
-                order_id: order_id,
+                order_id,
             }.with_timestamp(timestamp))
         });
         Box::new(fut)

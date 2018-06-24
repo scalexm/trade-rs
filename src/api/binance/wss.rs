@@ -225,7 +225,7 @@ impl HandlerImpl {
             "executionReport" => {
                 let report: BinanceExecutionReport = serde_json::from_str(json)?;
 
-                match report.x.as_ref() {
+                match report.x {
                     "NEW" => Some(
                         Notification::OrderConfirmation(OrderConfirmation {
                             order_id: report.c.to_owned(),
@@ -301,7 +301,7 @@ impl HandlerImpl {
             .into_iter()
             .filter(|update| update.u > snapshot.lastUpdateId)
             .flat_map(|update| update.updates)
-            .map(|update| Ok(update));
+            .map(Ok);
 
         let notif = Notification::LimitUpdates(
             bid.chain(ask).chain(buffered).collect::<Result<Vec<_>, ConversionError>>()?

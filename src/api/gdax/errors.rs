@@ -70,7 +70,7 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for Re
 }
 
 impl RestError {
-    crate fn from_gdax_error<'a>(status: StatusCode, gdax_error: Option<GdaxRestError<'a>>)
+    crate fn from_gdax_error(status: StatusCode, gdax_error: Option<GdaxRestError>)
         -> Self
     {
         RestError {

@@ -90,7 +90,7 @@ impl OrderBook {
             Side::Bid => self.bid.get(&price),
             Side::Ask => self.ask.get(&price),
         };
-        size.map(|s| *s).unwrap_or(0)
+        size.cloned().unwrap_or(0)
     }
 
     /// Iterator over the limits at bid, sorted by

@@ -37,7 +37,7 @@ impl<S: Fail> From<RestErrorKind<S>> for RestError<S> {
 
 impl<S: Fail> From<Context<RestErrorKind<S>>> for RestError<S> {
     fn from(inner: Context<RestErrorKind<S>>) -> RestError<S> {
-        RestError { inner: inner }
+        RestError { inner }
     }
 }
 

@@ -54,31 +54,25 @@ impl Prompt {
     fn process_event(&mut self, event: PullEvent) {
         match event {
             PullEvent::OrderAck(res) => {
-                match res {
-                    Some(err) => {
-                        let cause = err.cause().unwrap();
-                        match cause.cause() {
-                            Some(inner_cause) => {
-                                self.output = format!("{} ({})", cause, inner_cause)
-                            },
-                            None => self.output = format!("{}", cause),
-                        }
-                    },
-                    None => (),
+                if let Some(err) = res {
+                    let cause = err.cause().unwrap();
+                    match cause.cause() {
+                        Some(inner_cause) => {
+                            self.output = format!("{} ({})", cause, inner_cause)
+                        },
+                        None => self.output = format!("{}", cause),
+                    }
                 }
             },
             PullEvent::CancelAck(res) => {
-                match res {
-                    Some(err) => {
-                        let cause = err.cause().unwrap();
-                        match cause.cause() {
-                            Some(inner_cause) => {
-                                self.output = format!("{} ({})", cause, inner_cause)
-                            },
-                            None => self.output = format!("{}", cause),
-                        }
-                    },
-                    None => (),
+                if let Some(err) = res {
+                    let cause = err.cause().unwrap();
+                    match cause.cause() {
+                        Some(inner_cause) => {
+                            self.output = format!("{} ({})", cause, inner_cause)
+                        },
+                        None => self.output = format!("{}", cause),
+                    }
                 }
             },
             PullEvent::OrderConfirmation(order) => {

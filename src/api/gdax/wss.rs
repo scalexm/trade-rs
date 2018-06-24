@@ -162,7 +162,7 @@ impl HandlerImpl {
     fn parse_message(&mut self, json: &str) -> Result<Vec<Notification>, Error> {
         let event_type: EventType = serde_json::from_str(json)?;
 
-        let notifs = match event_type.type_.as_ref() {
+        let notifs = match event_type.type_ {
             "subscribe" => {
                 if self.state != SubscriptionState::NotSubscribed {
                     error!("received `subscribe` event while already subscribed");

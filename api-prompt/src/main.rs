@@ -74,15 +74,8 @@ fn main() {
         (@arg keys: -k --keys +takes_value "Keys file (default = `keys.json`)")
     ).get_matches();
 
-    let params = match matches.value_of("params") {
-        Some(params) => params,
-        None => "params.json",
-    };
-
-    let keys = match matches.value_of("keys") {
-        Some(keys) => keys,
-        None => "keys.json",
-    };
+    let params = matches.value_of("params").unwrap_or("params.json");
+    let keys = matches.value_of("keys").unwrap_or("keys.json");
 
     let params = File::open(params).expect("cannot open params file");
     let keys = File::open(keys).expect("cannot open keys file");
@@ -95,7 +88,7 @@ fn main() {
     order_book::display_price_tick(Some(price_tick));
     order_book::display_size_tick(Some(size_tick));
 
-    match matches.value_of("exchange").unwrap().as_ref() {
+    match matches.value_of("exchange").unwrap() {
         "binance" => {
             let keys = serde_json::from_reader(keys)
                 .expect("expected valid JSON for `binance::KeyPair`");
