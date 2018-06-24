@@ -106,6 +106,10 @@ impl ApiClient for Client {
     {
         self.ping_impl()
     }
+
+    fn params(&self) -> &Params {
+        &self.params
+    }
 }
 
 impl GenerateOrderId for Client {

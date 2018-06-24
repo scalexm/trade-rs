@@ -73,11 +73,11 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
             };
 
             let mut order = Order::new(price, size, side)
-                .time_in_force(time_in_force)
-                .time_window(TIME_WINDOW.with(|cell| cell.get()));
+                .with_time_in_force(time_in_force)
+                .with_time_window(TIME_WINDOW.with(|cell| cell.get()));
             
             if args.len() == 4 {
-                order = order.order_id::<C>(&args[3]);
+                order = order.with_order_id::<C>(&args[3]);
             }
 
             PUSH.with(move |cell| {
@@ -94,7 +94,7 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
             }
             
             let cancel = Cancel::new(args[0].to_string())
-                .time_window(TIME_WINDOW.with(|cell| cell.get()));
+                .with_time_window(TIME_WINDOW.with(|cell| cell.get()));
 
             PUSH.with(move |cell| {
                 cell.borrow()

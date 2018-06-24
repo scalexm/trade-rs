@@ -95,6 +95,10 @@ impl ApiClient for Client {
     {
         Box::new(Ok(().timestamped()).into_future())
     }
+
+    fn params(&self) -> &Params {
+        &self.params
+    }
 }
 
 impl GenerateOrderId for Client {
