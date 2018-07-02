@@ -16,6 +16,7 @@ struct GdaxOrder<'a> {
     #[serde(borrow)]
     client_oid: Option<&'a str>,
     time_in_force: &'a str,
+    post_only: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -126,6 +127,7 @@ impl Client {
             product_id: &self.params.symbol.name,
             client_oid: client_oid.as_ref().map(|oid| oid.as_ref()),
             time_in_force: time_in_force.as_str(),
+            post_only: true,
         };
 
         let body = serde_json::to_string(&order).expect("invalid json");
