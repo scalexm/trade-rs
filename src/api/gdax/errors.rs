@@ -50,6 +50,16 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::CancelErrorKind>> for R
                 api::errors::CancelErrorKind::UnknownOrder
             );
         }
+
+        if self.error_msg
+            .as_ref()
+            .map(|msg| msg.starts_with("Order already done"))
+            .unwrap_or(false)
+        {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::CancelErrorKind::UnknownOrder
+            );
+        }
         <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
     }
 }

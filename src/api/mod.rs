@@ -69,27 +69,15 @@ pub enum TimeInForce {
     FillOrKilll,
 }
 
-trait AsStr {
-    fn as_str(&self) -> &'static str;
-}
-
-impl AsStr for Side {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Side::Ask => "SELL",
-            Side::Bid => "BUY",
-        }
-    }
-}
-
-impl AsStr for TimeInForce {
-    fn as_str(&self) -> &'static str {
-        match self {
-            TimeInForce::GoodTilCanceled => "GTC",
-            TimeInForce::FillOrKilll => "FOK",
-            TimeInForce::ImmediateOrCancel => "IOC",
-        }
-    }
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// Order type:
+/// * `OrderType::Limit`: a normal limit order
+/// * `OrderType::LimitMaker`: a limit order which cannot take liquidity, i.e. an
+///    error would be returned by the exchange if the order crosses the other side
+///    of the book 
+pub enum OrderType {
+    Limit,
+    LimitMaker,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -98,6 +86,7 @@ pub struct Order {
     price: Price,
     size: Size,
     side: Side,
+    type_: OrderType,
     time_in_force: TimeInForce,
     time_window: u64,
     order_id: Option<String>,
@@ -113,10 +102,17 @@ impl Order {
             price,
             size,
             side,
+            type_: OrderType::Limit,
             time_in_force: TimeInForce::GoodTilCanceled,
             time_window: 5000,
             order_id: None,
         }
+    }
+
+    /// Set the order type.
+    pub fn with_order_type(mut self, order_type: OrderType) -> Self {
+        self.type_ = order_type;
+        self
     }
 
     /// Time in force, see https://www.investopedia.com/terms/t/timeinforce.asp.
@@ -141,22 +137,32 @@ impl Order {
         self
     }
 
+    /// Return the order id if one was provided.
     pub fn order_id(&self) -> Option<&str> {
         self.order_id.as_ref().map(|s| s.as_ref())
     }
 
+    /// Return the order price.
     pub fn price(&self) -> Price {
         self.price
     }
 
+    /// Return the order size.
     pub fn size(&self) -> Size {
         self.size
     }
 
+    /// Return the order type.
+    pub fn order_type(&self) -> OrderType {
+        self.type_
+    }
+
+    /// Return the chosen time in force.
     pub fn time_in_force(&self) -> TimeInForce {
         self.time_in_force
     }
 
+    /// Return the chosen validity time window.
     pub fn time_window(&self) -> u64 {
         self.time_window
     }

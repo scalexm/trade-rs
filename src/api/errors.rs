@@ -51,6 +51,9 @@ pub enum OrderErrorKind {
     #[fail(display = "chosen order id already exists")]
     /// The client specified order id is already in use.
     DuplicateOrder,
+
+    #[fail(display = "order would take liquidity")]
+    WouldTakeLiquidity,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Fail)]

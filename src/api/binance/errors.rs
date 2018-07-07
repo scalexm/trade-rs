@@ -96,6 +96,17 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for Re
             );
         }
 
+        if order_rejected &&
+            self.error_msg
+                .as_ref()
+                .map(|msg| msg.starts_with("Order would immediately match and take"))
+                .unwrap_or(false)
+        {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::OrderErrorKind::WouldTakeLiquidity
+            );
+        }
+
         <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
     }
 }

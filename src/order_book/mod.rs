@@ -1,4 +1,4 @@
-//! A simple data structure representing an order book.
+//! A module defining a simple data structure representing an order book.
 
 mod test;
 

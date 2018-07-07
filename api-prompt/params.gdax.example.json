@@ -5,6 +5,6 @@
         "size_tick": 100000000,
         "commission_tick": 100000000
     },
-    "ws_address": "wss://ws-feed-public.sandbox.gdax.com",
-    "http_address": "https://api-public.sandbox.gdax.com" 
+    "ws_address": "wss://ws-feed.pro.coinbase.com",
+    "http_address": "https://api.pro.coinbase.com"
 }

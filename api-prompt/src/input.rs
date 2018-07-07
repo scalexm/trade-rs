@@ -1,5 +1,5 @@
 use trade::{Error, Tick, Side};
-use trade::api::{ApiClient, Order, Cancel, TimeInForce};
+use trade::api::{ApiClient, Order, Cancel, TimeInForce, OrderType};
 use futures::sync::mpsc::UnboundedSender;
 use std::cell::{RefCell, Cell};
 use prompt::PushEvent;
@@ -73,6 +73,7 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
             };
 
             let mut order = Order::new(price, size, side)
+                .with_order_type(OrderType::LimitMaker)
                 .with_time_in_force(time_in_force)
                 .with_time_window(TIME_WINDOW.with(|cell| cell.get()));
             

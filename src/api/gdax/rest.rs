@@ -23,6 +23,31 @@ struct GdaxOrder<'a> {
 struct GdaxOrderAck<'a> {
     id: &'a str,
     created_at: &'a str,
+    status: &'a str,
+    reject_reason: Option<&'a str>,
+}
+
+trait AsStr {
+    fn as_str(&self) -> &'static str;
+}
+
+impl AsStr for Side {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Side::Ask => "sell",
+            Side::Bid => "buy",
+        }
+    }
+}
+
+impl AsStr for TimeInForce {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TimeInForce::GoodTilCanceled => "GTC",
+            TimeInForce::FillOrKilll => "FOK",
+            TimeInForce::ImmediateOrCancel => "IOC",
+        }
+    }
 }
 
 impl Client {
@@ -123,11 +148,11 @@ impl Client {
                 .expect("bad size tick"),
             price: &self.params.symbol.price_tick.convert_ticked(order.price)
                 .expect("bad price tick"),
-            side: &order.side.as_str().to_lowercase(),
+            side: &order.side.as_str(),
             product_id: &self.params.symbol.name,
             client_oid: client_oid.as_ref().map(|oid| oid.as_ref()),
             time_in_force: time_in_force.as_str(),
-            post_only: true,
+            post_only: order.type_ == OrderType::LimitMaker,
         };
 
         let body = serde_json::to_string(&order).expect("invalid json");
@@ -138,6 +163,18 @@ impl Client {
             let ack: GdaxOrderAck = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
+
+            if ack.status == "rejected" &&
+                ack.reject_reason.map(|r| r.starts_with("post only")).unwrap_or(false)
+            {
+                Err(
+                    api::errors::ApiError::RestError(
+                        api::errors::RestErrorKind::Specific(
+                            api::errors::OrderErrorKind::WouldTakeLiquidity
+                        ).into()
+                    )
+                )?;
+            }
 
             let time = Utc.datetime_from_str(ack.created_at, "%FT%T.%fZ")
                 .map_err(api::errors::RequestError::new)

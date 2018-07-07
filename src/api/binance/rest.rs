@@ -78,6 +78,38 @@ enum Signature {
     Yes,
 }
 
+trait AsStr {
+    fn as_str(&self) -> &'static str;
+}
+
+impl AsStr for Side {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Side::Ask => "SELL",
+            Side::Bid => "BUY",
+        }
+    }
+}
+
+impl AsStr for OrderType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            OrderType::Limit => "LIMIT",
+            OrderType::LimitMaker => "LIMIT_MAKER",
+        }
+    }
+}
+
+impl AsStr for TimeInForce {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TimeInForce::GoodTilCanceled => "GTC",
+            TimeInForce::FillOrKilll => "FOK",
+            TimeInForce::ImmediateOrCancel => "IOC",
+        }
+    }
+}
+
 impl Client {
     fn request<S: Fail>(
         &self,
@@ -163,7 +195,7 @@ impl Client {
         let mut query = QueryString::new();
         query.push("symbol", self.params.symbol.name.to_uppercase());
         query.push("side", order.side.as_str());
-        query.push("type", "LIMIT");
+        query.push("type", order.type_.as_str());
         query.push("timeInForce", order.time_in_force.as_str());
         query.push(
             "quantity",
