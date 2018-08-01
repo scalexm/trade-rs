@@ -8,11 +8,14 @@ use futures::sync::mpsc::{unbounded, UnboundedReceiver};
 use std::thread;
 use chrono::{Utc, TimeZone};
 use std::collections::HashMap;
+use chashmap::CHashMap;
+use std::sync::Arc;
 
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
         let params = self.params.clone();
         let keys = self.keys.clone();
+        let order_ids = self.order_ids.clone();
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
             info!("Initiating WebSocket connection at {}", params.ws_address);
@@ -23,6 +26,7 @@ impl Client {
                     state: SubscriptionState::NotSubscribed,
                     keys: keys.clone(),
                     orders: HashMap::new(),
+                    order_ids: order_ids.clone(),
                 })
             })
             {
@@ -47,6 +51,9 @@ struct HandlerImpl {
 
     // server order id => client order
     orders: HashMap<String, OrderConfirmation>,
+
+    // client order id => server order id (shared with `Client`)
+    order_ids: Arc<CHashMap<String, String>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
@@ -164,6 +171,7 @@ impl HandlerImpl {
 
         let notifs = match event_type.type_ {
             "subscribe" => {
+                // FIXME: close the stream if we get an error when trying to subscribe
                 if self.state != SubscriptionState::NotSubscribed {
                     error!("received `subscribe` event while already subscribed");
                 }
@@ -271,8 +279,14 @@ impl HandlerImpl {
                 let price = self.params.symbol.price_tick.convert_unticked(received.price)?;
                 let side = self.convert_gdax_side(received.side)?;
 
+                // The order id specified by the user, which defaults to the server order id
+                // in case it was left unspecified.
                 let order_id = received.client_oid.map(|oid| oid.to_owned())
                     .unwrap_or_else(|| received.order_id.to_owned());
+                
+                // Don't forget to update the concurrent map `server order id => client order id`
+                // in case the WebSocket notif arrives before the HTTP response
+                self.order_ids.insert(order_id.clone(), received.order_id.to_owned());
                 
                 let order = OrderConfirmation {
                     size,
