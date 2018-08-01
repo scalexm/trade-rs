@@ -3,8 +3,8 @@ use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request, self};
 use chrono::{Utc, TimeZone};
 use base64;
-use super::errors::RestError;
-use api::errors::ErrorKinded;
+use super::errors::{RestError, ErrorKinded};
+use api;
 use failure::Fail;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
@@ -51,16 +51,16 @@ impl AsStr for TimeInForce {
 }
 
 impl Client {
-    fn request<S: Fail>(
+    fn request<K: api::errors::ErrorKind>(
         &self,
         endpoint: &str,
         method: Method,
         body: String
     ) -> Box<
-            Future<Item = hyper::Chunk, Error = api::errors::ApiError<S>>
+            Future<Item = hyper::Chunk, Error = api::errors::ApiError<K>>
             + Send
             + 'static
-        > where RestError: ErrorKinded<api::errors::RestErrorKind<S>>
+        > where RestError: ErrorKinded<K>
     {
         let keys = self.keys.as_ref().expect(
             "cannot perform an HTTP request without a GDAX key pair"

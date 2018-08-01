@@ -1,6 +1,6 @@
 use std::fmt;
 use hyper::StatusCode;
-use api::{self, errors::ErrorKinded};
+use api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 crate struct GdaxRestError<'a> {
@@ -17,7 +17,11 @@ pub struct RestError {
     pub error_msg: Option<String>,
 }
 
-impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
+pub(super) trait ErrorKinded<K: api::errors::ErrorKind> {
+    fn kind(&self) -> api::errors::RestErrorKind<K>;
+}
+
+impl ErrorKinded<!> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<!> {
         if self.kind == RestErrorKind::TooManyRequests {
             return api::errors::RestErrorKind::TooManyRequests;
@@ -43,7 +47,7 @@ impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
     }
 }
 
-impl ErrorKinded<api::errors::RestErrorKind<api::errors::CancelErrorKind>> for RestError {
+impl ErrorKinded<api::errors::CancelErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::CancelErrorKind> {
         if self.kind == RestErrorKind::NotFound {
             return api::errors::RestErrorKind::Specific(
@@ -60,11 +64,11 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::CancelErrorKind>> for R
                 api::errors::CancelErrorKind::UnknownOrder
             );
         }
-        <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
+        <Self as ErrorKinded<!>>::kind(self).into()
     }
 }
 
-impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for RestError {
+impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::OrderErrorKind> {
         if self.error_msg
             .as_ref()
@@ -75,7 +79,7 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for Re
                 api::errors::OrderErrorKind::InsufficientBalance
             );
         }
-        <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
+        <Self as ErrorKinded<!>>::kind(self).into()
     }
 }
 

@@ -1,6 +1,6 @@
 use std::fmt;
 use hyper::StatusCode;
-use api::{self, errors::ErrorKinded};
+use api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 crate struct BinanceRestError<'a> {
@@ -21,7 +21,11 @@ pub struct RestError {
     pub error_msg: Option<String>,
 }
 
-impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
+pub(super) trait ErrorKinded<K: api::errors::ErrorKind> {
+    fn kind(&self) -> api::errors::RestErrorKind<K>;
+}
+
+impl ErrorKinded<!> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<!> {
         if self.kind == RestErrorKind::BrokeRateLimit ||
             self.kind == RestErrorKind::AddressBanned ||
@@ -52,7 +56,7 @@ impl ErrorKinded<api::errors::RestErrorKind<!>> for RestError {
     }
 }
 
-impl ErrorKinded<api::errors::RestErrorKind<api::errors::CancelErrorKind>> for RestError {
+impl ErrorKinded<api::errors::CancelErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::CancelErrorKind> {
         let unknown_order =
             (self.error_code == Some(-1010) || self.error_code == Some(-2011)) &&
@@ -64,11 +68,11 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::CancelErrorKind>> for R
             );
         }
 
-        <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
+        <Self as ErrorKinded<!>>::kind(self).into()
     }
 }
 
-impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for RestError {
+impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::OrderErrorKind> {
         let order_rejected =
             self.error_code == Some(-1010) ||
@@ -107,7 +111,7 @@ impl ErrorKinded<api::errors::RestErrorKind<api::errors::OrderErrorKind>> for Re
             );
         }
 
-        <Self as ErrorKinded<api::errors::RestErrorKind<!>>>::kind(self).into()
+        <Self as ErrorKinded<!>>::kind(self).into()
     }
 }
 

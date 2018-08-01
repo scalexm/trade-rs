@@ -1,13 +1,19 @@
 use failure::{Fail, Context, Backtrace};
 use std::fmt;
 
-#[derive(Debug)]
-/// An error coming from the REST API.
-pub struct RestError<S: Fail> {
-    inner: Context<RestErrorKind<S>>,
+pub trait ErrorKind: private::Sealed + Fail + Copy + Sized { }
+
+mod private {
+    pub trait Sealed { }
 }
 
-impl<S: Fail> Fail for RestError<S> {
+#[derive(Debug)]
+/// An error coming from the REST API.
+pub struct RestError<K: ErrorKind> {
+    inner: Context<RestErrorKind<K>>,
+}
+
+impl<K: ErrorKind> Fail for RestError<K> {
     fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
     }
@@ -17,27 +23,31 @@ impl<S: Fail> Fail for RestError<S> {
     }
 }
 
-impl<S: Fail> fmt::Display for RestError<S> {
+impl<K: ErrorKind> fmt::Display for RestError<K> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.inner, f)
     }
 }
 
-impl<S: Fail + Copy> RestError<S> {
-    pub fn kind(&self) -> RestErrorKind<S> {
+impl<K: ErrorKind> RestError<K> {
+    pub fn kind(&self) -> RestErrorKind<K> {
         *self.inner.get_context()
     }
 }
 
-impl<S: Fail> From<RestErrorKind<S>> for RestError<S> {
-    fn from(kind: RestErrorKind<S>) -> RestError<S> {
-        RestError { inner: Context::new(kind) }
+impl<K: ErrorKind> From<RestErrorKind<K>> for RestError<K> {
+    fn from(kind: RestErrorKind<K>) -> RestError<K> {
+        RestError {
+            inner: Context::new(kind),
+        }
     }
 }
 
-impl<S: Fail> From<Context<RestErrorKind<S>>> for RestError<S> {
-    fn from(inner: Context<RestErrorKind<S>>) -> RestError<S> {
-        RestError { inner }
+impl<K: ErrorKind> From<Context<RestErrorKind<K>>> for RestError<K> {
+    fn from(inner: Context<RestErrorKind<K>>) -> RestError<K> {
+        RestError {
+            inner,
+        }
     }
 }
 
@@ -56,6 +66,9 @@ pub enum OrderErrorKind {
     WouldTakeLiquidity,
 }
 
+impl private::Sealed for OrderErrorKind { }
+impl ErrorKind for OrderErrorKind { }
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Fail)]
 /// An error kind specific to the `cancel` API request.
 pub enum CancelErrorKind {
@@ -64,9 +77,15 @@ pub enum CancelErrorKind {
     UnknownOrder,
 }
 
+impl private::Sealed for CancelErrorKind { }
+impl ErrorKind for CancelErrorKind { }
+
+impl private::Sealed for ! { }
+impl ErrorKind for ! { }
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Fail)]
 /// REST error kind.
-pub enum RestErrorKind<S: Fail> {
+pub enum RestErrorKind<K: ErrorKind> {
     #[fail(display = "too many requests")]
     /// Too many requests were sent during a given time window, check rate limits.
     TooManyRequests,
@@ -89,7 +108,7 @@ pub enum RestErrorKind<S: Fail> {
 
     #[fail(display = "{}", _0)]
     /// More specific error kind, depending on the request being made.
-    Specific(S),
+    Specific(K),
 }
 
 #[derive(Debug)]
@@ -122,10 +141,10 @@ impl fmt::Display for RequestError {
 }
 
 #[derive(Debug, Fail)]
-pub enum ApiError<S: Fail> {
+pub enum ApiError<K: ErrorKind> {
     #[fail(display = "REST API error")]
     /// An error coming from the REST API.
-    RestError(#[cause] RestError<S>),
+    RestError(#[cause] RestError<K>),
 
     #[fail(display = "HTTP request error")]
     /// An error about the underlying HTTP request.
@@ -160,8 +179,4 @@ impl From<RestErrorKind<!>> for RestErrorKind<OrderErrorKind> {
             RestErrorKind::Specific(x) => x,
         }
     }
-}
-
-crate trait ErrorKinded<ErrorKind: Fail> {
-    fn kind(&self) -> ErrorKind;
 }
