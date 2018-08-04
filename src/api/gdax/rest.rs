@@ -187,6 +187,7 @@ impl Client {
                 None => ack.id.to_owned(),
             };
             order_ids.insert(order_id.clone(), ack.id.to_owned());
+            debug!("insert order id {} (from REST)", order_id);
 
             Ok(OrderAck {
                 order_id,
@@ -200,13 +201,16 @@ impl Client {
     {
         let order_id = match self.order_ids.get(&cancel.order_id) {
             Some(order_id) => order_id,
-            None => return Box::new(
-                Err(
-                    api::errors::RestErrorKind::Specific(
-                        api::errors::CancelErrorKind::UnknownOrder
-                    ).into()
-                ).map_err(api::errors::ApiError::RestError).into_future()
-            ),
+            None => {
+                warn!("called `cancel` with a not yet inserted order id");
+                return Box::new(
+                    Err(
+                        api::errors::RestErrorKind::Specific(
+                            api::errors::CancelErrorKind::UnknownOrder
+                        ).into()
+                    ).map_err(api::errors::ApiError::RestError).into_future()
+                );
+            }
         }.clone();
 
         let fut = self.request(&format!("orders/{}", order_id), Method::DELETE, String::new())

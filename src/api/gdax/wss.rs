@@ -287,6 +287,7 @@ impl HandlerImpl {
                 // Don't forget to update the concurrent map `server order id => client order id`
                 // in case the WebSocket notif arrives before the HTTP response
                 self.order_ids.insert(order_id.clone(), received.order_id.to_owned());
+                debug!("insert order id {} (from WSS)", order_id);
                 
                 let order = OrderConfirmation {
                     size,
