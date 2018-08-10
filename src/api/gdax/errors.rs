@@ -64,6 +64,17 @@ impl ErrorKinded<api::errors::CancelErrorKind> for RestError {
                 api::errors::CancelErrorKind::UnknownOrder
             );
         }
+
+        if self.error_msg
+            .as_ref()
+            .map(|msg| msg.starts_with("order not found"))
+            .unwrap_or(false)
+        {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::CancelErrorKind::UnknownOrder
+            );
+        }
+
         <Self as ErrorKinded<!>>::kind(self).into()
     }
 }
