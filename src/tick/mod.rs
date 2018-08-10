@@ -1,6 +1,5 @@
 //! On electronic exchanges, prices and sizes do not take continuous real values,
-//! but rather take their values on a discrete grid for whose step is known as a
-//! *tick*.
+//! but rather take their values on a discrete grid whose step is known as a *tick*.
 //! In other words, the price tick is the smallest possible change of the price of
 //! an asset, and the size tick is the smallest possible change of the size of an
 //! order.
@@ -142,7 +141,7 @@ impl Tick {
         let prevent_overflow: u64 = prevent_overflow.try_into().unwrap();
         
         Ok(format!(
-                "{0}.{1:02$}",
+            "{0}.{1:02$}",
             int,
             prevent_overflow % pow,
             pad
