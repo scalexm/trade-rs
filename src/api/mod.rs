@@ -308,6 +308,7 @@ pub struct Balance {
     pub locked: String,
 }
 
+/// A wrapper over a (symbol name) => (balance) `HashMap`.
 pub type Balances = HashMap<String, Balance>;
 
 /// A trait implemented by clients of various exchanges API.
