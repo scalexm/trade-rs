@@ -95,7 +95,7 @@ impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
 }
 
 impl RestError {
-    crate fn from_gdax_error(status: StatusCode, gdax_error: Option<GdaxRestError>)
+    pub(super) fn from_gdax_error(status: StatusCode, gdax_error: Option<GdaxRestError>)
         -> Self
     {
         RestError {

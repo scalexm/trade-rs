@@ -1,7 +1,6 @@
 use super::*;
 use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request, self};
-use chrono::{Utc, TimeZone};
 use base64;
 use super::errors::{RestError, ErrorKinded};
 use api;
@@ -176,11 +175,9 @@ impl Client {
                 )?;
             }
 
-            let time = Utc.datetime_from_str(ack.created_at, "%FT%T.%fZ")
+            let timestamp = convert_str_timestamp(ack.created_at)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
-            let timestamp = (time.timestamp() as u64) * 1000
-                + u64::from(time.timestamp_subsec_millis());
 
             let order_id = match client_oid {
                 Some(id) => id.clone(),

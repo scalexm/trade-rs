@@ -116,7 +116,7 @@ impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
 }
 
 impl RestError {
-    crate fn from_binance_error(status: StatusCode, binance_error: Option<BinanceRestError>)
+    pub(super) fn from_binance_error(status: StatusCode, binance_error: Option<BinanceRestError>)
         -> Self
     {
         RestError {

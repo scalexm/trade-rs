@@ -7,7 +7,7 @@ authors = ["scalexm <martin.alex32@hotmail.fr>"]
 futures = "0.1.17"
 tokio = "^0.1"
 cursive = "^0.8"
-trade = { path = "../" }
+trade = { path = "../../" }
 serde_json = "^1"
 failure = "^0.1"
 env_logger = "^0.5"

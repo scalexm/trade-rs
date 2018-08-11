@@ -1,12 +1,11 @@
 use order_book::LimitUpdate;
 use tick::ConversionError;
 use api::*;
-use super::{Keys, Client, Params};
+use super::{Keys, Client, Params, convert_str_timestamp};
 use serde_json;
 use ws;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver};
 use std::thread;
-use chrono::{Utc, TimeZone};
 use std::collections::HashMap;
 use chashmap::CHashMap;
 use std::sync::Arc;
@@ -66,15 +65,15 @@ enum GdaxChannel<'a> {
     },
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct GdaxAuth<'a> {
     key: &'a str,
     signature: String,
-    timestamp: u64,
+    timestamp: f64,
     passphrase: &'a str,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 /// Subscription parameters to be sent to GDAX.
 struct GdaxSubscription<'a> {
     #[serde(rename = "type")]
@@ -218,12 +217,7 @@ impl HandlerImpl {
 
             "match" => {
                 let trade: GdaxMatch = serde_json::from_str(json)?;
-                let time = Utc.datetime_from_str(
-                    trade.time,
-                    "%FT%T.%fZ"
-                )?;
-                let timestamp = (time.timestamp() as u64) * 1000
-                    + u64::from(time.timestamp_subsec_millis());
+                let timestamp = convert_str_timestamp(trade.time)?;
                 
                 let size = self.params.symbol.size_tick.convert_unticked(trade.size)?;
                 let price = self.params.symbol.price_tick.convert_unticked(trade.price)?;
@@ -268,12 +262,7 @@ impl HandlerImpl {
 
             "received" => {
                 let received: GdaxReceived = serde_json::from_str(json)?;
-                let time = Utc.datetime_from_str(
-                    received.time,
-                    "%FT%T.%fZ"
-                )?;
-                let timestamp = (time.timestamp() as u64) * 1000
-                    + u64::from(time.timestamp_subsec_millis());
+                let timestamp = convert_str_timestamp(received.time)?;
 
                 let size = self.params.symbol.size_tick.convert_unticked(received.size)?;
                 let price = self.params.symbol.price_tick.convert_unticked(received.price)?;
@@ -303,12 +292,7 @@ impl HandlerImpl {
 
             "done" => {
                 let done: GdaxDone = serde_json::from_str(json)?;
-                let time = Utc.datetime_from_str(
-                    done.time,
-                    "%FT%T.%fZ"
-                )?;
-                let timestamp = (time.timestamp() as u64) * 1000
-                    + u64::from(time.timestamp_subsec_millis());
+                let timestamp = convert_str_timestamp(done.time)?;
 
                 if done.reason != "canceled" {
                     return Ok(vec![]);
@@ -351,7 +335,7 @@ impl wss::HandlerImpl for HandlerImpl {
         if let Some(keys) = self.keys.as_ref() {
             use openssl::{sign::Signer, hash::MessageDigest};
 
-            let timestamp = timestamp_ms() / 1000;
+            let timestamp = timestamp_ms() as f64 / 1000.;
             let mut signer = Signer::new(MessageDigest::sha256(), &keys.secret_key).unwrap();
             let what = format!("{}GET/users/self/verify", timestamp);
             signer.update(what.as_bytes()).unwrap();

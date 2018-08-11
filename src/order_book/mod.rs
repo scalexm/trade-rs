@@ -131,7 +131,7 @@ impl OrderBook {
     /// assert_eq!(order_book1, order_book2);
     /// # }
     /// ```
-    pub fn diff(&self, other: &OrderBook) -> impl Iterator<Item = imitUpdate> {
+    pub fn diff(&self, other: &OrderBook) -> impl Iterator<Item = LimitUpdate> {
         use std::collections::HashMap;
 
         let mut updates = Vec::new();

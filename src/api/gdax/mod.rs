@@ -9,6 +9,7 @@ use openssl::pkey::{PKey, Private};
 use base64;
 use chashmap::CHashMap;
 use std::sync::Arc;
+use chrono::ParseError;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A GDAX key pair: api key + secret key, along with a pass phrase.
@@ -107,4 +108,11 @@ impl GenerateOrderId for Client {
 
         Uuid::new_v4().to_string()
     }
+}
+
+fn convert_str_timestamp(timestamp: &str) -> Result<u64, ParseError> {
+    use chrono::{DateTime, Utc};
+
+    let time = timestamp.parse::<DateTime<Utc>>()?;
+    Ok((time.timestamp() as u64) * 1000 + u64::from(time.timestamp_subsec_millis()))
 }
