@@ -1,4 +1,4 @@
-# api-prompt
+# prompt
 
 Small CLI app for testing `trade-rs` API.
 

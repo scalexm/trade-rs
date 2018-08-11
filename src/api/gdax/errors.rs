@@ -3,7 +3,7 @@ use hyper::StatusCode;
 use api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-crate struct GdaxRestError<'a> {
+pub(super) struct GdaxRestError<'a> {
     message: &'a str,
 }
 

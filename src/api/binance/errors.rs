@@ -3,7 +3,7 @@ use hyper::StatusCode;
 use api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-crate struct BinanceRestError<'a> {
+pub(super) struct BinanceRestError<'a> {
     code: i32,
     msg: &'a str,
 }
