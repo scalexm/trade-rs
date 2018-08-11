@@ -36,3 +36,7 @@ criterion = "0.2"
  [[bench]]
 name = "tick"
 harness = false
+
+[[bench]]
+name = "order_book"
+harness = false

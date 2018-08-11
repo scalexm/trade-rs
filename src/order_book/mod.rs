@@ -48,20 +48,25 @@ impl OrderBook {
     }
 
     /// Return best bid price. If the bid side is empty, return `0`.
-    /// Complexity: `O(1)`.
+    /// 
+    /// # Complexity
+    /// `O(1)`.
     pub fn best_bid(&self) -> Price {
         self.bid().next().map(|(price, _)| *price).unwrap_or(0)
     }
 
     /// Return best ask price. If the ask side is empty, return `Price::max_value()`.
-    /// Complexity: `O(1)`.
+    /// 
+    /// # Complexity
+    /// `O(1)`.
     pub fn best_ask(&self) -> Price {
         self.ask().next().map(|(price, _)| *price).unwrap_or(Price::max_value())
     }
 
     /// Update the given limit with the given updated size.
-    /// Complexity: `O(log(n))` where `n` is the number of limits at
-    /// the given side.
+    /// 
+    /// # Complexity
+    /// `O(log(n))` where `n` is the number of limits at the given side.
     pub fn update(&mut self, update: LimitUpdate) {
         let entry = match update.side {
             Side::Bid if update.size == 0 => {
@@ -83,8 +88,9 @@ impl OrderBook {
     }
 
     /// Retrieve the size at the given limit.
-    /// Complexity: `O(log(n))` where `n` is the number of limits at
-    /// the given side.
+    /// 
+    /// # Complexity
+    /// `O(log(n))` where `n` is the number of limits at the given side.
     pub fn size_at_limit(&self, side: Side, price: Price) -> Size {
         let size = match side {
             Side::Bid => self.bid.get(&price),
@@ -106,10 +112,11 @@ impl OrderBook {
         self.ask.iter()
     }
 
-    /// Compute the set of limit updates to apply to `self` in order
-    /// to be equal to `other`.
-    /// Complexity: `O(n + m)` where `n` is `self`'s length and `m` is
-    /// `other`'s length.
+    /// Return an iterator over the set of limit updates to apply to `self` in
+    /// order to be equal to `other`.
+    /// 
+    /// # Complexity
+    /// `O(n + m)` where `n` is `self`'s length and `m` is `other`'s length.
     /// 
     /// # Example
     /// ```
@@ -124,7 +131,7 @@ impl OrderBook {
     /// assert_eq!(order_book1, order_book2);
     /// # }
     /// ```
-    pub fn diff(&self, other: &OrderBook) -> Vec<LimitUpdate> {
+    pub fn diff(&self, other: &OrderBook) -> impl Iterator<Item = imitUpdate> {
         use std::collections::HashMap;
 
         let mut updates = Vec::new();
@@ -133,10 +140,9 @@ impl OrderBook {
             let mut entries: HashMap<_, _> = entries.iter().map(|(x, y)| (*x, *y)).collect();
 
             for (&price, &other_size) in other_entries {
-                let need_update = match entries.remove(&price) {
-                    Some(size) => size != other_size,
-                    None => true,
-                };
+                let need_update = entries.remove(&price)
+                    .map(|size| size != other_size)
+                    .unwrap_or(true);
 
                 if need_update {
                     updates.push(LimitUpdate::new(price, other_size, side));
@@ -151,7 +157,7 @@ impl OrderBook {
         compute_diff(&self.bid, &other.bid, Side::Bid);
         compute_diff(&self.ask, &other.ask, Side::Ask);
 
-        updates
+        updates.into_iter()
     }
 }
 

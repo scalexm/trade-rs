@@ -76,6 +76,9 @@ impl ConversionError {
 
 impl Tick {
     /// Return a new `Tick` with given `ticks_per_unit`.
+    /// 
+    /// # Panics
+    /// Panic if `ticks_per_unit` is `0`.
     pub fn new(ticks_per_unit: u64) -> Self {
         if ticks_per_unit == 0 {
             panic!("`ticks_per_unit` cannot be 0");
