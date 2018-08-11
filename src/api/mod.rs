@@ -10,6 +10,7 @@ use crate::*;
 use order_book::LimitUpdate;
 use futures::prelude::*;
 use std::ops::Deref;
+use std::collections::HashMap;
 
 pub use self::params::*;
 
@@ -297,6 +298,18 @@ pub trait GenerateOrderId {
     fn new_order_id(hint: &str) -> String;
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+/// Account balance for one asset.
+pub struct Balance {
+    /// Available amount, unticked.
+    pub free: String,
+
+    /// Locked amount, unticked.
+    pub locked: String,
+}
+
+pub type Balances = HashMap<String, Balance>;
+
 /// A trait implemented by clients of various exchanges API.
 pub trait ApiClient: GenerateOrderId {
     /// Type returned by the `stream` implementor, used for continuously receiving
@@ -317,6 +330,11 @@ pub trait ApiClient: GenerateOrderId {
     /// Send a ping to the exchange.
     fn ping(&self)
         -> Box<Future<Item = Timestamped<()>, Error = errors::Error> + Send + 'static>;
+    
+
+    /// Retrieve balances for this account.
+    fn balances(&self)
+        -> Box<Future<Item = Balances, Error = errors::Error> + Send + 'static>;
     
     /// Return underlying `Params`.
     fn params(&self) -> &Params;

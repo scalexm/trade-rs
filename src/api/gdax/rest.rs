@@ -26,6 +26,13 @@ struct GdaxOrderAck<'a> {
     reject_reason: Option<&'a str>,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct GdaxAccount<'a> {
+    currency: &'a str,
+    available: &'a str,
+    hold: &'a str,
+}
+
 trait AsStr {
     fn as_str(&self) -> &'static str;
 }
@@ -216,6 +223,25 @@ impl Client {
             Ok(CancelAck {
                 order_id,
             }.timestamped())
+        });
+        Box::new(fut)
+    }
+
+    crate fn balances_impl(&self)
+        -> Box<Future<Item = api::Balances, Error = api::errors::Error> + Send + 'static>
+    {
+        let fut = self.request("accounts", Method::GET, String::new()).and_then(move |body| {
+            let accounts: Vec<GdaxAccount> = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
+            
+            let balances = accounts.into_iter().map(|account| {
+                (account.currency.to_owned(), api::Balance {
+                    free: account.available.to_owned(),
+                    locked: account.hold.to_owned(),
+                })
+            }).collect();
+            Ok(balances)
         });
         Box::new(fut)
     }

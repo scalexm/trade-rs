@@ -100,6 +100,12 @@ impl ApiClient for Client {
     fn params(&self) -> &Params {
         &self.params
     }
+
+    fn balances(&self)
+        -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
+    {
+        self.balances_impl()
+    }
 }
 
 impl GenerateOrderId for Client {

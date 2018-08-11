@@ -110,38 +110,16 @@ impl ApiClient for Client {
     fn params(&self) -> &Params {
         &self.params
     }
+
+    fn balances(&self)
+        -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
+    {
+        self.balances_impl()
+    }
 }
 
 impl GenerateOrderId for Client {
     fn new_order_id(hint: &str) -> String {
         hint.to_owned()
     }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-/// Account balance for one asset.
-pub struct Balance {
-    /// Symbol name.
-    pub asset: String,
-
-    /// Available amount, unticked.
-    pub free: String,
-
-    /// Locked amount, unticked.
-    pub locked: String,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-/// Account information for this client.
-/// FIXME: should be integrated to the API.
-pub struct AccountInformation {
-    pub maker_commission: u64,
-    pub taker_commission: u64,
-    pub buyer_commission: u64,
-    pub seller_commission: u64,
-    pub can_trade: bool,
-    pub can_withdraw: bool,
-    pub can_deposit: bool,
-    pub update_timestamp: u64,
-    pub balances: Vec<Balance>,
 }

@@ -53,17 +53,16 @@ struct BinanceCancelAck<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct BinanceAccountInformation {
-    makerCommission: u64,
-    takerCommission: u64,
-    buyerCommission: u64,
-    sellerCommission: u64,
-    canTrade: bool,
-    canWithdraw: bool,
-    canDeposit: bool,
-    updateTime: u64,
-    balances: Vec<Balance>,
+struct BinanceBalance<'a> {
+    asset: &'a str,
+    free: &'a str,
+    locked: &'a str,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct BinanceAccountInformation<'a> {
+    #[serde(borrow)]
+    balances: Vec<BinanceBalance<'a>>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -281,12 +280,11 @@ impl Client {
         Box::new(fut)
     }
 
-    /// Retrieve account information for this client.
-    pub fn account_information(&self, time_window: u64)
-        -> Box<Future<Item = AccountInformation, Error = api::errors::Error> + Send + 'static>
+    crate fn balances_impl(&self)
+        -> Box<Future<Item = api::Balances, Error = api::errors::Error> + Send + 'static>
     {
         let mut query = QueryString::new();
-        query.push("recvWindow", time_window);
+        query.push("recvWindow", 30000);
         query.push("timestamp", timestamp_ms());
 
         let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
@@ -295,17 +293,14 @@ impl Client {
             let info: BinanceAccountInformation = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
-            Ok(AccountInformation {
-                maker_commission: info.makerCommission,
-                taker_commission: info.takerCommission,
-                buyer_commission: info.buyerCommission,
-                seller_commission: info.sellerCommission,
-                can_trade: info.canTrade,
-                can_withdraw: info.canWithdraw,
-                can_deposit: info.canDeposit,
-                update_timestamp: info.updateTime,
-                balances: info.balances,
-            })
+
+            let balances = info.balances.into_iter().map(|balance| {
+                (balance.asset.to_owned(), api::Balance {
+                    free: balance.free.to_owned(),
+                    locked: balance.free.to_owned(),
+                })
+            }).collect();
+            Ok(balances)
         });
         Box::new(fut)
     }
