@@ -24,7 +24,6 @@
 mod test;
 
 use std::fmt;
-use num_rational::Ratio;
 use std::convert::TryInto;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -129,14 +128,13 @@ impl Tick {
             }
         };
 
-        // denom is non null so `Ratio::new` cannot fail
-        let ratio = Ratio::new((int * denom + fract) * u128::from(self.0), denom);
+        let num = (int * denom + fract) * u128::from(self.0);
 
-        if !ratio.is_integer() {
+        if num % denom != 0 {
             return Err(ConversionError::unticked(unticked, self));
         }
 
-        Ok(ratio.to_integer().try_into().unwrap())
+        Ok((num / denom).try_into().unwrap())
     }
 
     /// Convert a value expressed in ticks back to an unticked value.

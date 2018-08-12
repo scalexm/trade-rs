@@ -71,13 +71,13 @@ pub enum TimeInForce {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// Order type:
-/// * `OrderType::Limit`: a normal limit order
-/// * `OrderType::LimitMaker`: a limit order which cannot take liquidity, i.e. an
-///    error would be returned by the exchange if the order crosses the other side
-///    of the book 
+/// Order type.
 pub enum OrderType {
+    /// A normal limit order.
     Limit,
+
+    /// A limit order which cannot take liquidity, i.e. an error would be returned by
+    /// the exchange if the order crosses the other side of the book.
     LimitMaker,
 }
 
@@ -285,6 +285,7 @@ pub enum Notification {
     /// The limit order book has changed and should be updated.
     LimitUpdates(Vec<Timestamped<LimitUpdate>>),
 
+    /// An order has been inserted.
     OrderConfirmation(Timestamped<OrderConfirmation>),
 
     /// An order has been updated.

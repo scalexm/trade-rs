@@ -19,7 +19,6 @@ extern crate hyper;
 extern crate hyper_tls;
 extern crate tokio;
 #[macro_use] extern crate log;
-extern crate num_rational;
 extern crate openssl;
 extern crate hex;
 extern crate chrono;

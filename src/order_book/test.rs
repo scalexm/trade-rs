@@ -21,7 +21,7 @@ fn test_diff() {
     odb2.update(lu(78, 5, Side::Bid));
     odb2.update(lu(77, 4, Side::Bid));
 
-    let mut diff = odb1.diff(&odb2);
+    let mut diff: Vec<_> = odb1.diff(&odb2).collect();
     diff.sort_by(|x, y| x.price.cmp(&y.price));
 
     assert_eq!(
