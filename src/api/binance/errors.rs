@@ -62,7 +62,7 @@ impl ErrorKinded<api::errors::CancelErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::CancelErrorKind> {
         let unknown_order =
             (self.error_code == Some(-1010) || self.error_code == Some(-2011)) &&
-             self.error_msg.as_ref().map(|msg| msg.starts_with("Unknown order")).unwrap_or(false);
+             self.error_msg.as_ref().map(|msg| msg.starts_with("UNKNOWN_ORDER")).unwrap_or(false);
 
         if self.error_code == Some(-2013) || unknown_order {
             return api::errors::RestErrorKind::Specific(

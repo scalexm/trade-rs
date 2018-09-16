@@ -402,13 +402,11 @@ impl HandlerImpl {
                 Ok(snapshot.owned())
             }).then(move |res| {
                 let _ = snd.send(res);
-                Ok(())
+                Ok::<(), !>(())
             });
 
-            use tokio::runtime;
-            let mut runtime = runtime::current_thread::Runtime::new().unwrap();
-            runtime.spawn(fut);
-            runtime.run().unwrap();
+            use tokio::runtime::current_thread;
+            current_thread::block_on_all(fut).unwrap();
         });
     }
 }

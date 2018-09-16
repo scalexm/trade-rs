@@ -1,7 +1,6 @@
 use trade::*;
 use trade::api::{self, *};
-use tokio::executor::current_thread;
-use tokio::runtime;
+use tokio::runtime::current_thread;
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedReceiver;
 use std::sync::mpsc;
@@ -37,7 +36,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
                     cloned.send(PullEvent::OrderAck(res.err())).unwrap();
                     Ok(())
                 });
-                current_thread::spawn(order_fut);
+                tokio::spawn(order_fut);
             },
             PushEvent::Cancel(cancel) => {
                 let cloned = self.pull.clone();
@@ -45,7 +44,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
                     cloned.send(PullEvent::CancelAck(res.err())).unwrap();
                     Ok(())
                 });
-                current_thread::spawn(cancel_fut);
+                tokio::spawn(cancel_fut);
             },
             PushEvent::Message(msg) => {
                 self.pull.send(PullEvent::Message(msg)).unwrap();
@@ -59,10 +58,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
         let fut = push.unwrap().for_each(move |event| {
             self.process_event(event)
         });
-
-        let mut runtime = runtime::current_thread::Runtime::new().unwrap();
-        runtime.spawn(fut);
-        runtime.run().unwrap();
+        current_thread::block_on_all(fut).unwrap();
     }
 }
 

@@ -1,13 +1,6 @@
 #![feature(nll)]
 
-extern crate trade;
-extern crate futures;
-extern crate tokio;
-extern crate cursive;
-extern crate serde_json;
-extern crate env_logger;
 #[macro_use] extern crate failure;
-#[macro_use] extern crate clap;
 
 mod prompt;
 mod input;
@@ -15,6 +8,7 @@ mod input;
 use std::fs::File;
 use trade::{order_book, Tick};
 use trade::api::{self, ApiClient, binance, gdax};
+use clap::clap_app;
 
 use cursive::Cursive;
 use cursive::theme::Theme;
@@ -24,10 +18,10 @@ use cursive::traits::Boxable;
 
 fn build_siv() -> Cursive {
     let mut siv = Cursive::default();
-    let theme = siv.current_theme();
+    let theme = siv.current_theme().clone();
     siv.set_theme(Theme {
         shadow: false,
-        ..*theme
+        ..theme
     });
     siv.set_fps(100);
 
