@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use tick::*;
+use crate::tick::Tick;
 
 #[test]
 fn convert_unticked() {

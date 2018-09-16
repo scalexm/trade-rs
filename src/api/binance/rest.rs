@@ -1,12 +1,21 @@
-use super::*;
-use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
-use hex;
-use hyper::{Method, Request, Body};
 use std::fmt;
-use super::errors::{RestError, ErrorKinded};
-use api;
-use api::timestamp::{IntoTimestamped, timestamp_ms};
+use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
+use hyper::{Method, Request, Body};
+use futures::prelude::*;
 use failure::Fail;
+use crate::Side;
+use crate::api::{
+    self,
+    OrderType,
+    TimeInForce,
+    Order,
+    OrderAck,
+    Cancel,
+    CancelAck,
+};
+use crate::api::binance::Client;
+use crate::api::binance::errors::{RestError, ErrorKinded};
+use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
 
 struct QueryString {
     query: String,

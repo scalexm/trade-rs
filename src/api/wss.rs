@@ -1,15 +1,19 @@
 // `Timeout`, `Token`
 #![allow(deprecated)]
 
-use crate::Error;
-use crate::api::Notification;
-use ws::{self, util::{Timeout, Token}};
+use ws::util::{Timeout, Token};
 use futures::sync::mpsc::UnboundedSender;
+use crate::api::Notification;
+
+pub type NotifSender = UnboundedSender<Notification>;
 
 /// An object handling a WebSocket API connection.
+/// Inside handler functions, panicking can be used to terminate
+/// the connection easily (the connection always happen in a 
+/// separate, free thread).
 crate struct Handler<T> {
     out: ws::Sender,
-    snd: UnboundedSender<Notification>,
+    snd: NotifSender,
     keep_alive: bool,
 
     /// We keep a reference to the `EXPIRE` timeout so that we can cancel it when we receive
@@ -21,7 +25,7 @@ crate struct Handler<T> {
 
 crate trait HandlerImpl {
     fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()>;
-    fn on_message(&mut self, text: String) -> Result<Vec<Notification>, Error>;
+    fn on_message(&mut self, text: &str, out: &NotifSender) -> Result<(), failure::Error>;
 }
 
 const PING: Token = Token(1);
@@ -45,15 +49,6 @@ impl<T> Handler<T> {
             timeout: None,
             inner,
         }
-    }
-
-    fn send(&mut self, notif: Notification) -> ws::Result<()> {
-        if let Err(..) = self.snd.unbounded_send(notif) {
-            // The corresponding receiver was dropped, this connection does not make sense
-            // anymore.
-            self.out.shutdown()?;
-        }
-        Ok(())
     }
 }
 
@@ -95,16 +90,8 @@ impl<T: HandlerImpl> ws::Handler for Handler<T> {
 
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(text) = msg {
-            match self.inner.on_message(text) {
-                Ok(notifs) => {
-                    for notif in notifs {
-                        self.send(notif)?;
-                    }
-                },
-
-                Err(err) => {
-                    error!("Message parsing encountered error: `{}`", err)
-                }
+            if let Err(err) = self.inner.on_message(&text, &self.snd) {
+                error!("Message handling encountered error: `{}`", err)
             }
         }
         Ok(())

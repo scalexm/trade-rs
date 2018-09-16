@@ -1,6 +1,7 @@
 #![cfg(test)]
 
-use order_book::*;
+use crate::{OrderBook, TickUnit, Side};
+use crate::order_book::LimitUpdate;
 
 fn lu(price: TickUnit, size: TickUnit, side: Side) -> LimitUpdate {
     LimitUpdate::new(price, size, side)

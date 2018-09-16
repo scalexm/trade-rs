@@ -9,12 +9,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function(
         "unticked",
-        move |b| b.iter(|| tick.convert_unticked("1278.853").unwrap())
+        move |b| b.iter(|| tick.ticked("1278.853").unwrap())
     );
 
     c.bench_function(
         "ticked",
-        move |b| b.iter(|| tick.convert_ticked(1278853).unwrap())
+        move |b| b.iter(|| tick.unticked(1278853).unwrap())
     );
 }
 

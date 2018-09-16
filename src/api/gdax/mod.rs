@@ -4,13 +4,23 @@ mod wss;
 mod rest;
 pub mod errors;
 
-use api::*;
-use api::timestamp::IntoTimestamped;
 use openssl::pkey::{PKey, Private};
-use base64;
 use chashmap::CHashMap;
 use std::sync::Arc;
-use chrono::ParseError;
+use futures::prelude::*;
+use crate::api::{
+    self,
+    Params,
+    ApiClient,
+    GenerateOrderId,
+    Notification,
+    Order,
+    OrderAck,
+    Cancel,
+    CancelAck,
+    Balances
+};
+use crate::api::timestamp::{Timestamped, IntoTimestamped};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A GDAX key pair: api key + secret key, along with a pass phrase.
@@ -51,7 +61,7 @@ impl Client {
     /// Create a new GDAX API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will forward
     /// the user data stream.
-    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error> {
+    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         let keys = match key_pair {
             Some(pair) => {
                 let secret_key = PKey::hmac(&base64::decode(&pair.secret_key)?)?;
@@ -117,7 +127,7 @@ impl GenerateOrderId for Client {
     }
 }
 
-fn convert_str_timestamp(timestamp: &str) -> Result<u64, ParseError> {
+fn convert_str_timestamp(timestamp: &str) -> Result<u64, chrono::ParseError> {
     use chrono::{DateTime, Utc};
 
     let time = timestamp.parse::<DateTime<Utc>>()?;

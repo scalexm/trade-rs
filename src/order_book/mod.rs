@@ -1,11 +1,10 @@
 //! A module defining a simple data structure representing an order book.
 
+pub mod display;
 mod test;
 
-use crate::*;
-use std::fmt;
-use std::collections::btree_map::{BTreeMap, Entry};
-use std::cell::Cell;
+use std::collections::btree_map::BTreeMap;
+use crate::{TickUnit, Side};
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 /// An order book. Internally uses two `BTreeMap`, one
@@ -68,6 +67,8 @@ impl OrderBook {
     /// # Complexity
     /// `O(log(n))` where `n` is the number of limits at the given side.
     pub fn update(&mut self, update: LimitUpdate) {
+        use std::collections::btree_map::Entry;
+
         let entry = match update.side {
             Side::Bid if update.size == 0 => {
                 self.bid.remove(&update.price);
@@ -158,66 +159,5 @@ impl OrderBook {
         compute_diff(&self.ask, &other.ask, Side::Ask);
 
         updates.into_iter()
-    }
-}
-
-thread_local! {
-    static DISPLAY_LIMIT: Cell<usize> = Cell::new(5);
-    static DISPLAY_PRICE_TICK: Cell<Option<Tick>> = Cell::new(None);
-    static DISPLAY_SIZE_TICK: Cell<Option<Tick>> = Cell::new(None);
-}
-
-/// Set the thread local display limit for both sides when displaying an order book. 
-pub fn display_limit(limit: usize) {
-    DISPLAY_LIMIT.with(|dl| dl.set(limit));
-}
-
-/// Set the tread local tick size for displaying prices. If `None`, values are displayed in ticks.
-pub fn display_price_tick(maybe_tick: Option<Tick>) {
-    DISPLAY_PRICE_TICK.with(|dt| dt.set(maybe_tick));
-}
-
-/// Set the tread local tick size for displaying sizes. If `None`, values are displayed in ticks.
-pub fn display_size_tick(maybe_tick: Option<Tick>) {
-    DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
-}
-
-/// Convert a ticked value in an unticked value with the current thread local price tick.
-pub fn displayable_price(ticked: TickUnit) -> String {
-    match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
-        Some(tick) => tick.unticked(ticked).unwrap(),
-        None => format!("{}", ticked),
-    }
-}
-
-/// Convert a ticked value in an unticked value with the current thread local size tick.
-pub fn displayable_size(ticked: TickUnit) -> String {
-    match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
-        Some(tick) => tick.unticked(ticked).unwrap(),
-        None => format!("{}", ticked),
-    }
-}
-
-impl fmt::Display for OrderBook {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let display_limit = DISPLAY_LIMIT.with(|dl| dl.get());
-
-        writeln!(f, "## ASK")?;
-        let ask: Vec<_> = self.ask()
-            .take(display_limit)
-            .collect();
-        for (&price, &size) in ask.iter().rev() {
-            writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;
-        }
-
-        write!(f, "\n\n")?;
-        for (&price, &size) in self.bid()
-                                   .take(display_limit)
-        {
-            writeln!(f, "{}:\t{}", displayable_price(price), displayable_size(size))?;
-        }
-        writeln!(f, "## BID")?;
-
-        Ok(())
     }
 }

@@ -8,10 +8,10 @@ pub mod timestamp;
 pub mod symbol;
 mod wss;
 
-use crate::*;
-use order_book::LimitUpdate;
 use futures::prelude::*;
 use std::collections::HashMap;
+use crate::{TickUnit, Side};
+use crate::order_book::LimitUpdate;
 
 use self::timestamp::Timestamped;
 pub use self::params::SymbolInfo;

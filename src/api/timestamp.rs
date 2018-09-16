@@ -5,6 +5,7 @@ pub type Timestamp = u64;
 /// Return UTC timestamp in milliseconds.
 pub fn timestamp_ms() -> Timestamp {
     use std::time::{SystemTime, UNIX_EPOCH};
+
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time went backward");

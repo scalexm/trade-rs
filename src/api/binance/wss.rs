@@ -1,14 +1,23 @@
-use order_book::LimitUpdate;
-use tick::ConversionError;
-use api::*;
-use api::timestamp::IntoTimestamped;
 use std::{mem, thread};
-use ws;
-use serde_json;
-use futures::{prelude::*, sync::mpsc::{unbounded, UnboundedReceiver}};
 use std::sync::mpsc;
-use super::{Client, errors::RestError, Params};
 use std::borrow::Cow;
+use futures::prelude::*;
+use futures::sync::mpsc::{unbounded, UnboundedReceiver};
+use crate::{tick, Side};
+use crate::order_book::LimitUpdate;
+use crate::api::{
+    Notification,
+    Params,
+    Trade,
+    OrderConfirmation,
+    OrderUpdate,
+    OrderExpiration,
+};
+use crate::api::wss;
+use crate::api::timestamp::{Timestamped, IntoTimestamped};
+use crate::api::binance::Client;
+use crate::api::binance::errors::RestError;
+
 
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
@@ -49,7 +58,7 @@ struct LimitUpdates {
     updates: Vec<Timestamped<LimitUpdate>>,
 }
 
-type BookReceiver = mpsc::Receiver<Result<BinanceBookSnapshot<'static>, Error>>;
+type BookReceiver = mpsc::Receiver<Result<BinanceBookSnapshot<'static>, failure::Error>>;
 
 #[derive(Debug)]
 struct BookWaitingState {
@@ -168,7 +177,7 @@ impl HandlerImpl {
     /// Utility function for converting a `BinanceLimitUpdate` into a `LimitUpdate` (with
     /// conversion in ticks and so on).
     fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side)
-        -> Result<LimitUpdate, ConversionError>
+        -> Result<LimitUpdate, tick::ConversionError>
     {
         Ok(
             LimitUpdate {
@@ -180,7 +189,7 @@ impl HandlerImpl {
     }
 
     /// Parse a (should-be) JSON message sent by binance.
-    fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, Error> {
+    fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, failure::Error> {
         let event_type: EventType = serde_json::from_str(json)?;
 
         let notif = match event_type.e {
@@ -218,7 +227,7 @@ impl HandlerImpl {
 
                 Some(
                     Notification::LimitUpdates(
-                        bid.chain(ask).collect::<Result<Vec<_>, ConversionError>>()?
+                        bid.chain(ask).collect::<Result<Vec<_>, tick::ConversionError>>()?
                     )
                 )
             },
@@ -273,9 +282,9 @@ impl HandlerImpl {
 
     fn process_book_snapshot(
         &self,
-        snapshot: Result<BinanceBookSnapshot, Error>,
+        snapshot: Result<BinanceBookSnapshot, failure::Error>,
         buffered_events: Vec<LimitUpdates>
-    ) -> Result<Notification, Error>
+    ) -> Result<Notification, failure::Error>
     {
         let snapshot = snapshot?;
 
@@ -296,7 +305,7 @@ impl HandlerImpl {
             .map(Ok);
 
         let notif = Notification::LimitUpdates(
-            bid.chain(ask).chain(buffered).collect::<Result<Vec<_>, ConversionError>>()?
+            bid.chain(ask).chain(buffered).collect::<Result<Vec<_>, tick::ConversionError>>()?
         );
 
         Ok(notif)
@@ -406,16 +415,13 @@ impl wss::HandlerImpl for HandlerImpl {
         out.ping(vec![])
     }
 
-    fn on_message(&mut self, text: String) -> Result<Vec<Notification>, Error> {
-        match self.parse_message(&text) {
+    fn on_message(&mut self, text: &str, out: &wss::NotifSender) -> Result<(), failure::Error> {
+        match self.parse_message(text)? {
             // Depth update notif: behavior depends on the status of the order book snapshot.
-            Ok(Some(Notification::LimitUpdates(updates))) => {
+            Some(Notification::LimitUpdates(updates)) => {
                 match mem::replace(&mut self.book_snapshot_state, BookSnapshotState::Ok) {
                     // Very first limit update event received: time to ask for the book snapshot.
-                    BookSnapshotState::None => {
-                        self.request_book_snapshot(updates);
-                        Ok(vec![])
-                    },
+                    BookSnapshotState::None => self.request_book_snapshot(updates),
 
                     // Still waiting: buffer incoming events.
                     BookSnapshotState::Waiting(mut state) => {
@@ -423,19 +429,25 @@ impl wss::HandlerImpl for HandlerImpl {
                             u: self.previous_u.unwrap(),
                             updates,
                         });
-                        Ok(self.maybe_recv_book(state).into_iter().collect())
-                    },
+
+                        if let Some(notif) = self.maybe_recv_book(state) {
+                            out.unbounded_send(notif).unwrap();
+                        }
+                    }
 
                     // We already received the book snapshot and notified the final consumer,
                     // we can now notify further notifications to them.
-                    BookSnapshotState::Ok => {
-                        Ok(vec![Notification::LimitUpdates(updates)])
-                    },
+                    BookSnapshotState::Ok => out.unbounded_send(
+                        Notification::LimitUpdates(updates)
+                    ).unwrap(),
                 }
             },
 
             // Other notif: just forward to the consumer.
-            other => Ok(other?.into_iter().collect()),
+            Some(notif) => out.unbounded_send(notif).unwrap(),
+
+            None => (),
         }
+        Ok(())
     }
 }

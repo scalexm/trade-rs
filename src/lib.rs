@@ -3,8 +3,6 @@
 //! hence making it easier to develop cross exchange automated trading
 //! strategies.
 
-#![feature(crate_in_paths)]
-#![feature(crate_visibility_modifier)]
 #![feature(nll)]
 #![feature(try_from)]
 #![feature(never_type)]
@@ -31,10 +29,8 @@ pub mod api;
 pub mod order_book;
 pub mod tick;
 
-pub use failure::Error;
-
-pub use tick::{Tick, TickUnit};
-pub use order_book::OrderBook;
+pub use self::tick::{Tick, TickUnit};
+pub use self::order_book::OrderBook;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Side of an order (bid or ask).

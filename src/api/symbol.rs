@@ -1,11 +1,11 @@
-use crate::Tick;
 use std::ops::Deref;
 use arrayvec::ArrayString;
+use crate::Tick;
 
 /// A small string type used for symbol names.
 pub type SymbolName = ArrayString<[u8; 10]>;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A type carrying information about the traded symbol.
 pub struct Symbol {
     name: SymbolName,
@@ -27,8 +27,8 @@ pub struct WithSymbol<T> {
 }
 
 impl<T> WithSymbol<T> {
-    pub fn symbol(&self) -> &Symbol {
-        &self.symbol
+    pub fn symbol(&self) -> Symbol {
+        self.symbol
     }
 
     pub fn into_inner(self) -> T {

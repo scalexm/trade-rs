@@ -46,7 +46,7 @@ impl fmt::Display for Tick {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum Tickable {
     Ticked(TickUnit),
     Unticked(String),
@@ -60,7 +60,7 @@ impl Tickable {
         }
     }
 
-    pub fn unticked<'a>(&'a self, tick: Tick) -> Cow<'a, str> {
+    pub fn unticked(&'_ self, tick: Tick) -> Cow<'_, str> {
         match self {
             Tickable::Ticked(value) => Cow::Owned(tick.unticked(*value).unwrap()),
             Tickable::Unticked(value) => Cow::Borrowed(&value)
@@ -107,7 +107,7 @@ impl Tick {
     }
 
     /// Return the number of ticks per unit carried by `self`.
-    pub fn ticks_per_unit(&self) -> TickUnit {
+    pub fn ticks_per_unit(self) -> TickUnit {
         self.0
     }
 

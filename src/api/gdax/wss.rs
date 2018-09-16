@@ -1,15 +1,20 @@
-use order_book::LimitUpdate;
-use tick::ConversionError;
-use api::*;
-use api::timestamp::{IntoTimestamped, timestamp_ms};
-use super::{Keys, Client, Params, convert_str_timestamp};
-use serde_json;
-use ws;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver};
 use std::thread;
 use std::collections::HashMap;
 use chashmap::CHashMap;
 use std::sync::Arc;
+use crate::{tick, Side};
+use crate::order_book::LimitUpdate;
+use crate::api::{
+    Notification,
+    OrderConfirmation,
+    OrderUpdate,
+    Trade,
+    OrderExpiration,
+};
+use crate::api::wss;
+use crate::api::timestamp::{timestamp_ms, IntoTimestamped};
+use crate::api::gdax::{convert_str_timestamp, Keys, Client, Params};
 
 impl Client {
     crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
@@ -31,7 +36,7 @@ impl Client {
             })
             {
                 error!("WebSocket connection terminated with error: `{}`", err);
-            }   
+            }
         });
         
         rcv
@@ -145,7 +150,7 @@ struct EventType<'a> {
 
 impl HandlerImpl {
     fn convert_gdax_update(&self, l: (&str, &str), side: Side)
-        -> Result<LimitUpdate, ConversionError>
+        -> Result<LimitUpdate, tick::ConversionError>
     {
         Ok(
             LimitUpdate {
@@ -156,7 +161,7 @@ impl HandlerImpl {
         )
     }
 
-    fn convert_gdax_side(&self, side: &str) -> Result<Side, Error> {
+    fn convert_gdax_side(&self, side: &str) -> Result<Side, failure::Error> {
         let side = match side {
             "buy" => Side::Bid,
             "sell" => Side::Ask,
@@ -166,17 +171,16 @@ impl HandlerImpl {
     }
 
     /// Parse a (should-be) JSON message sent by gdax.
-    fn parse_message(&mut self, json: &str) -> Result<Vec<Notification>, Error> {
+    fn parse_message(&mut self, json: &str, out: &wss::NotifSender) -> Result<(), failure::Error> {
         let event_type: EventType = serde_json::from_str(json)?;
 
-        let notifs = match event_type.type_ {
+        match event_type.type_ {
             "subscribe" => {
-                // FIXME: close the stream if we get an error when trying to subscribe
+                // FIXME: panic if we get an error when trying to subscribe
                 if self.state != SubscriptionState::NotSubscribed {
                     error!("received `subscribe` event while already subscribed");
                 }
                 self.state = SubscriptionState::Subscribed;
-                vec![]
             },
 
             "snapshot" => {
@@ -192,11 +196,10 @@ impl HandlerImpl {
                     .map(|(price, size)| self.convert_gdax_update((price, size), Side::Ask))
                     .map(|l| Ok(l?.timestamped()));
                 
-                vec![
-                    Notification::LimitUpdates(
-                        bid.chain(ask).collect::<Result<Vec<_>, ConversionError>>()?
-                    )
-                ]
+                let notif = Notification::LimitUpdates(
+                    bid.chain(ask).collect::<Result<Vec<_>, tick::ConversionError>>()?
+                );
+                out.unbounded_send(notif).unwrap();
             },
 
             "l2update" => {
@@ -208,12 +211,12 @@ impl HandlerImpl {
                         let side = self.convert_gdax_side(side)?;
                         Ok(self.convert_gdax_update((price, size), side)?)
                     })
-                    .map(|l: Result<_, Error>| Ok(l?.timestamped()));
-                vec![
-                    Notification::LimitUpdates(
-                        updates.collect::<Result<Vec<_>, Error>>()?
-                    )
-                ]
+                    .map(|l: Result<_, failure::Error>| Ok(l?.timestamped()));
+
+                let notif = Notification::LimitUpdates(
+                    updates.collect::<Result<Vec<_>, failure::Error>>()?
+                );
+                out.unbounded_send(notif).unwrap();
             },
 
             "match" => {
@@ -222,15 +225,13 @@ impl HandlerImpl {
                 
                 let size = self.params.symbol.size_tick.ticked(trade.size)?;
                 let price = self.params.symbol.price_tick.ticked(trade.price)?;
-                
-                let mut notifs = Vec::new();
 
                 // An order which is about us
                 if trade.profile_id.is_some() {
-                    let mut update_order = |order: &mut OrderConfirmation| {
+                    let update_order = |order: &mut OrderConfirmation| {
                         order.size -= size;
 
-                        notifs.push(
+                        out.unbounded_send(
                             Notification::OrderUpdate(OrderUpdate {
                                 order_id: order.order_id.clone(),
                                 consumed_size: size,
@@ -238,7 +239,7 @@ impl HandlerImpl {
                                 remaining_size: order.size,
                                 commission: 0,
                             }.with_timestamp(timestamp))
-                        );
+                        ).unwrap();
                     };
 
                     // These two conditions are exclusive.
@@ -250,15 +251,13 @@ impl HandlerImpl {
                     }
                 }
 
-                notifs.push(
+                out.unbounded_send(
                     Notification::Trade(Trade {
                         size,
                         price,
                         maker_side: self.convert_gdax_side(trade.side)?,
                     }.with_timestamp(timestamp))
-                );
-
-                notifs
+                ).unwrap();
             },
 
             "received" => {
@@ -288,7 +287,9 @@ impl HandlerImpl {
 
                 self.orders.insert(received.order_id.to_owned(), order.clone());
 
-                vec![Notification::OrderConfirmation(order.with_timestamp(timestamp))]
+                out.unbounded_send(
+                    Notification::OrderConfirmation(order.with_timestamp(timestamp))
+                ).unwrap();
             }
 
             "done" => {
@@ -296,17 +297,19 @@ impl HandlerImpl {
                 let timestamp = convert_str_timestamp(done.time)?;
 
                 if done.reason != "canceled" {
-                    return Ok(vec![]);
+                    return Ok(());
                 }
 
                 let order_id = match self.orders.get(done.order_id) {
                     Some(order) => order.order_id.to_owned(),
-                    None => return Ok(vec![]),
+                    None => return Ok(()),
                 };
 
-                vec![Notification::OrderExpiration(OrderExpiration {
-                    order_id,
-                }.with_timestamp(timestamp))]
+                out.unbounded_send(
+                    Notification::OrderExpiration(OrderExpiration {
+                        order_id,
+                    }.with_timestamp(timestamp))
+                ).unwrap();
             }
 
             "error" => {
@@ -314,9 +317,9 @@ impl HandlerImpl {
                 bail!("{}: {:?}", error.message, error.reason);
             },
 
-            _ => vec![],
+            _ => (),
         };
-        Ok(notifs)
+        Ok(())
     }
 }
 
@@ -331,9 +334,8 @@ impl wss::HandlerImpl for HandlerImpl {
                 product_ids: &product_ids,
             },
         ];
-        let mut auth = None;
 
-        if let Some(keys) = self.keys.as_ref() {
+        let auth = self.keys.as_ref().map(|keys| {
             use openssl::{sign::Signer, hash::MessageDigest};
 
             let timestamp = timestamp_ms() as f64 / 1000.;
@@ -342,15 +344,14 @@ impl wss::HandlerImpl for HandlerImpl {
             signer.update(what.as_bytes()).unwrap();
             let signature = base64::encode(&signer.sign_to_vec().unwrap());
 
-            auth = Some(GdaxAuth {
+            channels.push(GdaxChannel::Channel("user"));
+            GdaxAuth {
                 key: &keys.api_key,
                 signature,
                 timestamp,
                 passphrase: &keys.pass_phrase,
-            });
-
-            channels.push(GdaxChannel::Channel("user"));
-        }
+            }
+        });
 
         let subscription = GdaxSubscription {
             type_: "subscribe",
@@ -367,7 +368,7 @@ impl wss::HandlerImpl for HandlerImpl {
         }
     }
 
-    fn on_message(&mut self, text: String) -> Result<Vec<Notification>, Error> {
-        self.parse_message(&text)
+    fn on_message(&mut self, text: &str, out: &wss::NotifSender) -> Result<(), failure::Error> {
+        self.parse_message(text, out)
     }
 }

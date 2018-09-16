@@ -4,8 +4,21 @@ mod wss;
 mod rest;
 pub mod errors;
 
-use api::*;
 use openssl::pkey::{PKey, Private};
+use futures::prelude::*;
+use crate::api::{
+    self,
+    ApiClient,
+    GenerateOrderId,
+    Params,
+    Order,
+    OrderAck,
+    Cancel,
+    CancelAck,
+    Notification,
+    Balances,
+};
+use crate::api::timestamp::Timestamped;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A binance key pair: api key + secret key.
@@ -50,7 +63,7 @@ impl Client {
     /// Create a new binance API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will request
     /// a listen key for the user data stream. The request will block the thread.
-    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, Error> {
+    pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         match key_pair {
             Some(pair) => {
                 let secret_key = PKey::hmac(pair.secret_key.as_bytes())?;

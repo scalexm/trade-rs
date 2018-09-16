@@ -1,11 +1,22 @@
-use super::*;
 use openssl::{sign::Signer, hash::MessageDigest};
-use hyper::{Method, Request, self};
-use base64;
-use super::errors::{RestError, ErrorKinded};
-use api;
-use api::timestamp::timestamp_ms;
+use hyper::{Method, Request};
+use futures::prelude::*;
 use failure::Fail;
+use crate::{Side};
+use crate::api::{
+    self,
+    TimeInForce,
+    OrderType,
+    Order,
+    OrderAck,
+    Cancel,
+    CancelAck,
+    Balance,
+    Balances
+};
+use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
+use crate::api::gdax::{convert_str_timestamp, Client};
+use crate::api::gdax::errors::{RestError, ErrorKinded};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
 struct GdaxOrder<'a> {
@@ -93,8 +104,8 @@ impl Client {
             .header("CB-ACCESS-SIGN", signature.as_bytes())
             .header("CB-ACCESS-TIMESTAMP", format!("{}", timestamp).as_bytes())
             .header("CB-ACCESS-PASSPHRASE", keys.pass_phrase.as_bytes())
-            .header("User-Agent", "hyper".as_bytes())
-            .header("Content-Type", "application/json".as_bytes())
+            .header("User-Agent", &b"hyper"[..])
+            .header("Content-Type", &b"application/json"[..])
             .body(body.into());
         
         let request = match request {
@@ -229,7 +240,7 @@ impl Client {
     }
 
     crate fn balances_impl(&self)
-        -> Box<Future<Item = api::Balances, Error = api::errors::Error> + Send + 'static>
+        -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
     {
         let fut = self.request("accounts", Method::GET, String::new()).and_then(move |body| {
             let accounts: Vec<GdaxAccount> = serde_json::from_slice(&body)
@@ -237,7 +248,7 @@ impl Client {
                 .map_err(api::errors::ApiError::RequestError)?;
             
             let balances = accounts.into_iter().map(|account| {
-                (account.currency.to_owned(), api::Balance {
+                (account.currency.to_owned(), Balance {
                     free: account.available.to_owned(),
                     locked: account.hold.to_owned(),
                 })

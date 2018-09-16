@@ -1,6 +1,6 @@
 use std::fmt;
 use hyper::StatusCode;
-use api;
+use crate::api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 pub(super) struct GdaxRestError<'a> {
