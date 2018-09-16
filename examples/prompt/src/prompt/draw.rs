@@ -1,5 +1,5 @@
 use trade::order_book;
-use super::Prompt;
+use crate::prompt::Prompt;
 
 use cursive::Printer;
 use cursive::view::View;
@@ -22,8 +22,8 @@ impl View for Prompt {
             let line = format!(
                 "{}: {} @ {} ({:?})",
                 order.order_id,
-                order_book::displayable_size(order.size),
-                order_book::displayable_price(order.price),
+                order_book::display::displayable_size(order.size),
+                order_book::display::displayable_price(order.price),
                 order.side
             );
             printer.print((printer.size.x - line.len(), i), &line);

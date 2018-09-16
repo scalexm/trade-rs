@@ -91,7 +91,7 @@ impl Prompt {
                     self.output = format!(
                         "filled order `{}` with quantity {}",
                         update.order_id,
-                        order_book::displayable_size(update.consumed_size)
+                        order_book::display::displayable_size(update.consumed_size)
                     );
 
                     if order.size == 0 {

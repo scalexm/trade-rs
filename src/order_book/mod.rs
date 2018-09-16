@@ -4,6 +4,7 @@ pub mod display;
 mod test;
 
 use std::collections::btree_map::BTreeMap;
+use serde_derive::{Serialize, Deserialize};
 use crate::{TickUnit, Side};
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]

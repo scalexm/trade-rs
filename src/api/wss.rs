@@ -3,6 +3,7 @@
 
 use ws::util::{Timeout, Token};
 use futures::sync::mpsc::UnboundedSender;
+use log::error;
 use crate::api::Notification;
 
 pub type NotifSender = UnboundedSender<Notification>;

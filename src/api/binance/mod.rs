@@ -6,6 +6,8 @@ pub mod errors;
 
 use openssl::pkey::{PKey, Private};
 use futures::prelude::*;
+use log::debug;
+use serde_derive::{Serialize, Deserialize};
 use crate::api::{
     self,
     ApiClient,
@@ -78,11 +80,11 @@ impl Client {
                 };
 
                 use tokio::runtime::current_thread;
-                info!("Requesting listen key");
+                debug!("Requesting listen key");
                 let listen_key = current_thread::Runtime::new()
                     .unwrap()
                     .block_on(client.get_listen_key())?;
-                info!("Received listen key");
+                debug!("Received listen key");
 
                 client.keys.as_mut().unwrap().listen_key = listen_key;
                 Ok(client)

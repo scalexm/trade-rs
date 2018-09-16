@@ -2,6 +2,8 @@ use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request};
 use futures::prelude::*;
 use failure::Fail;
+use log::{warn, debug};
+use serde_derive::{Serialize, Deserialize};
 use crate::{Side};
 use crate::api::{
     self,

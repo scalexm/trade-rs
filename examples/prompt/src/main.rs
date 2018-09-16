@@ -85,8 +85,8 @@ fn main() {
     
     let price_tick = params.symbol.price_tick;
     let size_tick = params.symbol.size_tick;
-    order_book::display_price_tick(Some(price_tick));
-    order_book::display_size_tick(Some(size_tick));
+    order_book::display::set_price_tick(Some(price_tick));
+    order_book::display::set_size_tick(Some(size_tick));
 
     match matches.value_of("exchange").unwrap() {
         "binance" => {

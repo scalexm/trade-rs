@@ -3,6 +3,9 @@ use std::thread;
 use std::collections::HashMap;
 use chashmap::CHashMap;
 use std::sync::Arc;
+use log::{debug, error};
+use failure::bail;
+use serde_derive::{Serialize, Deserialize};
 use crate::{tick, Side};
 use crate::order_book::LimitUpdate;
 use crate::api::{
@@ -23,7 +26,7 @@ impl Client {
         let order_ids = self.order_ids.clone();
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
-            info!("Initiating WebSocket connection at {}", params.ws_address);
+            debug!("Initiating WebSocket connection at {}", params.ws_address);
             
             if let Err(err) = ws::connect(params.ws_address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), false, HandlerImpl {

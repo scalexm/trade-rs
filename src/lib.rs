@@ -6,28 +6,13 @@
 #![feature(nll)]
 #![feature(try_from)]
 #![feature(never_type)]
-
-extern crate ws;
-extern crate futures;
-extern crate serde_json;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate failure;
-#[macro_use] extern crate failure_derive;
-extern crate hyper;
-extern crate hyper_tls;
-extern crate tokio;
-#[macro_use] extern crate log;
-extern crate openssl;
-extern crate hex;
-extern crate chrono;
-extern crate base64;
-extern crate chashmap;
-extern crate uuid;
-extern crate arrayvec;
+#![feature(crate_visibility_modifier)]
 
 pub mod api;
 pub mod order_book;
 pub mod tick;
+
+use serde_derive::{Serialize, Deserialize};
 
 pub use self::tick::{Tick, TickUnit};
 pub use self::order_book::OrderBook;

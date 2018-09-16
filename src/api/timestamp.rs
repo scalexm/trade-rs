@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use serde_derive::{Serialize, Deserialize};
 
 pub type Timestamp = u64;
 
@@ -12,7 +13,7 @@ pub fn timestamp_ms() -> Timestamp {
     timestamp.as_secs() * 1000 + u64::from(timestamp.subsec_millis())
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Wrapper around a type carrying an additionnal timestamp. Deref to `T`.
 pub struct Timestamped<T> {
     timestamp: Timestamp,

@@ -3,6 +3,9 @@ use std::sync::mpsc;
 use std::borrow::Cow;
 use futures::prelude::*;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver};
+use log::{error, debug};
+use failure::bail;
+use serde_derive::Deserialize;
 use crate::{tick, Side};
 use crate::order_book::LimitUpdate;
 use crate::api::{
@@ -33,7 +36,7 @@ impl Client {
             if let Some(listen_key) = listen_key {
                 address += &format!("/{}", listen_key);
             }
-            info!("Initiating WebSocket connection at {}", address);
+            debug!("Initiating WebSocket connection at {}", address);
 
             if let Err(err) = ws::connect(address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), true, HandlerImpl{
@@ -316,7 +319,7 @@ impl HandlerImpl {
     {
         match state.rcv.try_recv() {
             Ok(book) => {
-                info!("Received LOB snapshot");
+                debug!("Received LOB snapshot");
                 match self.process_book_snapshot(book, state.events) {
                     Ok(notif) => {
                         self.book_snapshot_state = BookSnapshotState::Ok;
@@ -367,7 +370,7 @@ impl HandlerImpl {
             self.params.symbol.name.to_uppercase()
         ).parse().expect("invalid address");
 
-        info!("Initiating LOB request at `{}`", address);
+        debug!("Initiating LOB request at `{}`", address);
 
         thread::spawn(move || {
             let https = match hyper_tls::HttpsConnector::new(2) {

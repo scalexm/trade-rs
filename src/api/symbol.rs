@@ -1,5 +1,6 @@
 use std::ops::Deref;
 use arrayvec::ArrayString;
+use serde_derive::{Serialize, Deserialize};
 use crate::Tick;
 
 /// A small string type used for symbol names.

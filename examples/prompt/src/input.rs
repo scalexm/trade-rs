@@ -1,9 +1,9 @@
-use trade::{Error, Tick, Side};
+use trade::{Tick, Side};
 use trade::api::{ApiClient, Order, Cancel, TimeInForce, OrderType};
 use futures::sync::mpsc::UnboundedSender;
 use std::cell::{RefCell, Cell};
-use prompt::PushEvent;
 use cursive::Cursive;
+use crate::prompt::PushEvent;
 
 thread_local! {
     static PUSH: RefCell<Option<UnboundedSender<PushEvent>>> = RefCell::new(None);
@@ -48,7 +48,7 @@ pub fn submit_input<C: ApiClient>(
 }
 
 fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
-    -> Result<(), Error>
+    -> Result<(), failure::Error>
 {
     match cmd {
         side @ "buy" | side @ "sell" => {
@@ -62,8 +62,8 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                 _ => unreachable!(),
             };
 
-            let size = size_tick.convert_unticked(&args[0])?;
-            let price = price_tick.convert_unticked(&args[1])?;
+            let size = size_tick.ticked(&args[0])?;
+            let price = price_tick.ticked(&args[1])?;
 
             let time_in_force = match args[2].to_lowercase().as_ref() {
                 "gtc" => TimeInForce::GoodTilCanceled,

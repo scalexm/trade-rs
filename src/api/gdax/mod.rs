@@ -8,6 +8,7 @@ use openssl::pkey::{PKey, Private};
 use chashmap::CHashMap;
 use std::sync::Arc;
 use futures::prelude::*;
+use serde_derive::{Serialize, Deserialize};
 use crate::api::{
     self,
     Params,

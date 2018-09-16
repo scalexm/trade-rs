@@ -6,7 +6,7 @@ use futures::prelude::*;
 use futures::sync::mpsc::UnboundedReceiver;
 use std::sync::mpsc;
 
-pub(in prompt) enum PullEvent {
+pub enum PullEvent {
     OrderAck(Option<api::errors::OrderError>),
     CancelAck(Option<api::errors::CancelError>),
     OrderConfirmation(OrderConfirmation),
@@ -22,7 +22,7 @@ pub enum PushEvent {
     Message(String),
 }
 
-pub(in prompt) struct PushThread<C> {
+pub struct PushThread<C> {
     pub push: Option<UnboundedReceiver<PushEvent>>,
     pub pull: mpsc::Sender<PullEvent>,
     pub client: C,
@@ -54,7 +54,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
         Ok(())
     }
 
-    pub(in prompt) fn run(mut self) {
+    pub fn run(mut self) {
         let push = self.push.take();
         let fut = push.unwrap().for_each(move |event| {
             self.process_event(event)
@@ -66,7 +66,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
     }
 }
 
-pub(in prompt) struct OrderBookThread<S> {
+pub struct OrderBookThread<S> {
     pub stream: Option<S>,
     pub pull: mpsc::Sender<PullEvent>,
     pub order_book: OrderBook,
@@ -95,7 +95,7 @@ impl<S: Stream<Item = Notification, Error = ()>> OrderBookThread<S> {
         Ok(())
     }
 
-    pub(in prompt) fn run(mut self) {
+    pub fn run(mut self) {
         let pull = self.pull.clone();
         let stream = self.stream.take();
 

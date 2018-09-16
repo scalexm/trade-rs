@@ -26,6 +26,8 @@ mod test;
 use std::fmt;
 use std::convert::TryInto;
 use std::borrow::Cow;
+use failure_derive::Fail;
+use serde_derive::{Serialize, Deserialize};
 
 /// Base type for tick units;
 pub type TickUnit = u64;

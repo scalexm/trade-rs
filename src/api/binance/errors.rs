@@ -1,5 +1,7 @@
 use std::fmt;
 use hyper::StatusCode;
+use failure_derive::Fail;
+use serde_derive::Deserialize;
 use crate::api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]

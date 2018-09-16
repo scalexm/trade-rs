@@ -3,6 +3,7 @@ use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
 use hyper::{Method, Request, Body};
 use futures::prelude::*;
 use failure::Fail;
+use serde_derive::Deserialize;
 use crate::Side;
 use crate::api::{
     self,

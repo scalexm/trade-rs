@@ -10,6 +10,7 @@ mod wss;
 
 use futures::prelude::*;
 use std::collections::HashMap;
+use serde_derive::{Serialize, Deserialize};
 use crate::{TickUnit, Side};
 use crate::order_book::LimitUpdate;
 

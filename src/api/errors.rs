@@ -1,7 +1,8 @@
-use failure::{Fail, Context, Backtrace};
+use failure::{Context, Backtrace};
+use failure_derive::Fail;
 use std::fmt;
 
-pub trait ErrorKind: private::Sealed + Fail + Copy + Sized { }
+pub trait ErrorKind: private::Sealed + failure::Fail + Copy + Sized { }
 
 mod private {
     pub trait Sealed { }
@@ -13,12 +14,14 @@ pub struct RestError<K: ErrorKind> {
     inner: Context<RestErrorKind<K>>,
 }
 
-impl<K: ErrorKind> Fail for RestError<K> {
-    fn cause(&self) -> Option<&Fail> {
+impl<K: ErrorKind> failure::Fail for RestError<K> {
+    fn cause(&self) -> Option<&failure::Fail> {
+        use failure::Fail;
         self.inner.cause()
     }
 
     fn backtrace(&self) -> Option<&Backtrace> {
+        use failure::Fail;
         self.inner.backtrace()
     }
 }
@@ -113,19 +116,19 @@ pub enum RestErrorKind<K: ErrorKind> {
 
 #[derive(Debug)]
 pub struct RequestError {
-    inner: Box<Fail>,
+    inner: Box<failure::Fail>,
 }
 
 impl RequestError {
-    crate fn new<E: Fail>(err: E) -> Self {
+    crate fn new<E: failure::Fail>(err: E) -> Self {
         RequestError {
             inner: Box::new(err),
         }
     }
 }
 
-impl Fail for RequestError {
-    fn cause(&self) -> Option<&Fail> {
+impl failure::Fail for RequestError {
+    fn cause(&self) -> Option<&failure::Fail> {
         self.inner.cause()
     }
 
