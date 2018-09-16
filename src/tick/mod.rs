@@ -25,6 +25,10 @@ mod test;
 
 use std::fmt;
 use std::convert::TryInto;
+use std::borrow::Cow;
+
+/// Base type for tick units;
+pub type TickUnit = u64;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An object carrying the number of ticks per unit of something
@@ -34,7 +38,7 @@ use std::convert::TryInto;
 /// the tick size is 1e-8, so the number of ticks per unit would be 1e8.
 /// 
 /// Used for both prices and sizes.
-pub struct Tick(u64);
+pub struct Tick(TickUnit);
 
 impl fmt::Display for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -43,9 +47,25 @@ impl fmt::Display for Tick {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-enum ValueType {
-    Ticked(u64),
+pub enum Tickable {
+    Ticked(TickUnit),
     Unticked(String),
+}
+
+impl Tickable {
+    pub fn ticked(&self, tick: Tick) -> TickUnit {
+        match self {
+            Tickable::Ticked(value) => *value,
+            Tickable::Unticked(value) => tick.ticked(&value).unwrap()
+        }
+    }
+
+    pub fn unticked<'a>(&'a self, tick: Tick) -> Cow<'a, str> {
+        match self {
+            Tickable::Ticked(value) => Cow::Owned(tick.unticked(*value).unwrap()),
+            Tickable::Unticked(value) => Cow::Borrowed(&value)
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
@@ -54,21 +74,21 @@ enum ValueType {
 /// value in ticks has failed.
 pub struct ConversionError {
     tick: Tick,
-    value: ValueType,
+    value: Tickable,
 }
 
 impl ConversionError {
-    fn ticked(value: u64, tick: Tick) -> Self {
+    fn ticked(value: TickUnit, tick: Tick) -> Self {
         ConversionError {
             tick,
-            value: ValueType::Ticked(value),
+            value: Tickable::Ticked(value),
         }
     }
 
-    fn unticked(value: &str, tick: Tick) -> Self {
+    fn unticked(value: String, tick: Tick) -> Self {
         ConversionError {
             tick,
-            value: ValueType::Unticked(value.to_owned()),
+            value: Tickable::Unticked(value),
         }
     }
 }
@@ -78,7 +98,7 @@ impl Tick {
     /// 
     /// # Panics
     /// Panic if `ticks_per_unit` is `0`.
-    pub fn new(ticks_per_unit: u64) -> Self {
+    pub fn new(ticks_per_unit: TickUnit) -> Self {
         if ticks_per_unit == 0 {
             panic!("`ticks_per_unit` cannot be 0");
         }
@@ -87,7 +107,7 @@ impl Tick {
     }
 
     /// Return the number of ticks per unit carried by `self`.
-    pub fn ticks_per_unit(&self) -> u64 {
+    pub fn ticks_per_unit(&self) -> TickUnit {
         self.0
     }
 
@@ -100,38 +120,22 @@ impl Tick {
     /// 
     /// # Panics
     /// Panic in case of overflow.
-    pub fn convert_unticked(self, unticked: &str) -> Result<u64, ConversionError> {
+    pub fn ticked(self, unticked: &str) -> Result<TickUnit, ConversionError> {
         let mut parts = unticked.split('.').take(2);
         let (int, fract) = match (parts.next(), parts.next()) {
             (Some(int), Some(fract)) => (int, fract),
             (Some(int), None) => (int, ""),
-            (None, _) => return Err(ConversionError::unticked(unticked, self)),
+            (None, _) => return Err(ConversionError::unticked(unticked.to_owned(), self)),
         };
 
         let denom = 10_u128.pow(fract.len() as u32);
 
-        let int = if int.is_empty() {
-            0
-        } else {
-            match int.parse::<u128>() {
-                Ok(int) => int,
-                Err(..) => return Err(ConversionError::unticked(unticked, self)),
-            }
-        };
-
-        let fract = if fract.is_empty() {
-            0
-        } else {
-            match fract.parse::<u128>() {
-                Ok(fract) => fract,
-                Err(..) => return Err(ConversionError::unticked(unticked, self)),
-            }
-        };
-
+        let int = int.parse::<u128>().unwrap_or(0);
+        let fract = fract.parse::<u128>().unwrap_or(0);
         let num = (int * denom + fract) * u128::from(self.0);
 
         if num % denom != 0 {
-            return Err(ConversionError::unticked(unticked, self));
+            return Err(ConversionError::unticked(unticked.to_owned(), self));
         }
 
         Ok((num / denom).try_into().unwrap())
@@ -141,30 +145,27 @@ impl Tick {
     ///
     /// # Errors
     /// Return `Err` if the number of ticks per unit does not divide some power of 10.
-    /// 
-    /// # Panics
-    /// Panic in case of overflow.
-    pub fn convert_ticked(self, ticked: u64) -> Result<String, ConversionError> {
-        let mut pow = 1;
+    pub fn unticked(self, ticked: TickUnit) -> Result<String, ConversionError> {
+        let ticks_per_unit = u128::from(self.0);
         let mut pad = 0;
-        while self.0 > pow {
+        let mut pow = 1; // `pow` may reach 10^20 which does not fit in a `u64`
+        while ticks_per_unit > pow {
             pad += 1;
             pow *= 10;
         }
 
-        if pow % self.0 != 0 {
-            return Err(ConversionError::ticked(ticked, self));
+        if pow % ticks_per_unit != 0 {
+            return Err(ConversionError::ticked(ticked.to_owned(), self));
         }
 
-        let int = ticked / self.0;
-        let prevent_overflow = u128::from(pow) * u128::from(ticked)
-            / u128::from(self.0);
-        let prevent_overflow: u64 = prevent_overflow.try_into().unwrap();
+        let ticked = u128::from(ticked);
+        let int = ticked / ticks_per_unit;
+        let fract = (pow * ticked / ticks_per_unit) % pow;
         
         Ok(format!(
             "{0}.{1:02$}",
             int,
-            prevent_overflow % pow,
+            fract,
             pad
         ))
     }

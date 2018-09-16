@@ -1,6 +1,7 @@
 use order_book::LimitUpdate;
 use tick::ConversionError;
 use api::*;
+use api::timestamp::{IntoTimestamped, timestamp_ms};
 use super::{Keys, Client, Params, convert_str_timestamp};
 use serde_json;
 use ws;
@@ -149,8 +150,8 @@ impl HandlerImpl {
         Ok(
             LimitUpdate {
                 side,
-                price: self.params.symbol.price_tick.convert_unticked(l.0)?,
-                size: self.params.symbol.size_tick.convert_unticked(l.1)?,
+                price: self.params.symbol.price_tick.ticked(l.0)?,
+                size: self.params.symbol.size_tick.ticked(l.1)?,
             }
         )
     }
@@ -219,8 +220,8 @@ impl HandlerImpl {
                 let trade: GdaxMatch = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(trade.time)?;
                 
-                let size = self.params.symbol.size_tick.convert_unticked(trade.size)?;
-                let price = self.params.symbol.price_tick.convert_unticked(trade.price)?;
+                let size = self.params.symbol.size_tick.ticked(trade.size)?;
+                let price = self.params.symbol.price_tick.ticked(trade.price)?;
                 
                 let mut notifs = Vec::new();
 
@@ -264,8 +265,8 @@ impl HandlerImpl {
                 let received: GdaxReceived = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(received.time)?;
 
-                let size = self.params.symbol.size_tick.convert_unticked(received.size)?;
-                let price = self.params.symbol.price_tick.convert_unticked(received.price)?;
+                let size = self.params.symbol.size_tick.ticked(received.size)?;
+                let price = self.params.symbol.price_tick.ticked(received.price)?;
                 let side = self.convert_gdax_side(received.side)?;
 
                 // The order id specified by the user, which defaults to the server order id

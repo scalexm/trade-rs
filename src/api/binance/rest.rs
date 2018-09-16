@@ -5,6 +5,7 @@ use hyper::{Method, Request, Body};
 use std::fmt;
 use super::errors::{RestError, ErrorKinded};
 use api;
+use api::timestamp::{IntoTimestamped, timestamp_ms};
 use failure::Fail;
 
 struct QueryString {
@@ -199,13 +200,13 @@ impl Client {
         query.push(
             "quantity",
             self.params.symbol.size_tick
-                .convert_ticked(order.size)
+                .unticked(order.size)
                 .expect("bad size tick")
         );
         query.push(
             "price",
             self.params.symbol.price_tick
-                .convert_ticked(order.price)
+                .unticked(order.price)
                 .expect("bad price tick")
         );
         if let Some(order_id) = &order.order_id {

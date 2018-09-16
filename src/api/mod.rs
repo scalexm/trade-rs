@@ -3,64 +3,31 @@
 pub mod binance;
 pub mod gdax;
 pub mod errors;
-mod params;
+pub mod params;
+pub mod timestamp;
+pub mod symbol;
 mod wss;
 
 use crate::*;
 use order_book::LimitUpdate;
 use futures::prelude::*;
-use std::ops::Deref;
 use std::collections::HashMap;
 
-pub use self::params::*;
+use self::timestamp::Timestamped;
+pub use self::params::SymbolInfo;
 
-pub type Timestamp = u64;
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// Params needed for an API client.
+pub struct Params {
+    /// Symbol information.
+    pub symbol: SymbolInfo,
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize, Serialize)]
-/// Wrapper around a type carrying an additionnal timestamp. Deref to `T`.
-pub struct Timestamped<T> {
-    timestamp: Timestamp,
-    #[serde(flatten)]
-    inner: T,
+    /// WebSocket API address.
+    pub ws_address: String,
+
+    /// HTTP REST API address.
+    pub http_address: String,
 }
-
-impl<T> Timestamped<T> {
-    /// Registered timestamp.
-    pub fn timestamp(&self) -> Timestamp {
-        self.timestamp
-    }
-
-    /// Return the wrapped value.
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
-}
-
-impl<T> Deref for Timestamped<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-trait IntoTimestamped: Sized {
-    fn timestamped(self) -> Timestamped<Self> {
-        Timestamped {
-            timestamp: timestamp_ms(),
-            inner: self,
-        }
-    }
-
-    fn with_timestamp(self, timestamp: Timestamp) -> Timestamped<Self> {
-        Timestamped {
-            timestamp,
-            inner: self,
-        }
-    }
-}
-
-impl<T: Sized> IntoTimestamped for T { }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// See https://www.investopedia.com/terms/t/timeinforce.asp.
@@ -84,8 +51,8 @@ pub enum OrderType {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to be sent through the API.
 pub struct Order {
-    price: Price,
-    size: Size,
+    price: TickUnit,
+    size: TickUnit,
     side: Side,
     type_: OrderType,
     time_in_force: TimeInForce,
@@ -98,7 +65,7 @@ impl Order {
     /// * `price` being the order price
     /// * `size` being the order size
     /// * `side` being `Side::Bid` (buy) or `Side::Ask` (sell)
-    pub fn new(price: Price, size: Size, side: Side) -> Self {
+    pub fn new(price: TickUnit, size: TickUnit, side: Side) -> Self {
         Order {
             price,
             size,
@@ -144,12 +111,12 @@ impl Order {
     }
 
     /// Return the order price.
-    pub fn price(&self) -> Price {
+    pub fn price(&self) -> TickUnit {
         self.price
     }
 
     /// Return the order size.
-    pub fn size(&self) -> Size {
+    pub fn size(&self) -> TickUnit {
         self.size
     }
 
@@ -222,28 +189,28 @@ pub struct OrderUpdate {
     pub order_id: String,
 
     /// Size just consumed by last trade.
-    pub consumed_size: Size,
+    pub consumed_size: TickUnit,
 
     /// Total remaining size for this order (can be maintained in a standalone way
     /// using the size of the order at insertion time, `consumed_size` and `commission`).
-    pub remaining_size: Size,
+    pub remaining_size: TickUnit,
 
     /// Price at which the last trade happened.
-    pub consumed_price: Price,
+    pub consumed_price: TickUnit,
 
     /// Commission amount (warning: for binance this may not be in the same currency as
     /// the traded asset).
-    pub commission: Size,
+    pub commission: TickUnit,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A liquidity consuming order.
 pub struct Trade {
     /// Price in ticks.
-    pub price: Price,
+    pub price: TickUnit,
 
     /// Size consumed by the trade.
-    pub size: Size,
+    pub size: TickUnit,
 
     /// Side of the maker:
     /// * if `Ask`, then the maker was providing liquidity on the ask side,
@@ -267,10 +234,10 @@ pub struct OrderConfirmation {
     pub order_id: String,
 
     /// Price at which the order was inserted.
-    pub price: Price,
+    pub price: TickUnit,
 
     /// Size at which the order was inserted.
-    pub size: Price,
+    pub size: TickUnit,
 
     /// Side of the order.
     pub side: Side,

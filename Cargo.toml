@@ -20,6 +20,7 @@ tokio = "^0.1"
 chrono = "^0.4"
 base64 = "^0.9"
 chashmap = "2.2.0"
+arrayvec = "^0.4"
 
 [dependencies.uuid]
 version = "^0.6"

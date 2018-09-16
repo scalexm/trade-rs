@@ -2,10 +2,10 @@
 extern crate trade;
 
 use criterion::Criterion;
-use trade::{Price, Size, Side, OrderBook};
+use trade::{TickUnit, Side, OrderBook};
 use trade::order_book::LimitUpdate;
 
-fn lu(price: Price, size: Size, side: Side) -> LimitUpdate {
+fn lu(price: TickUnit, size: TickUnit, side: Side) -> LimitUpdate {
     LimitUpdate::new(price, size, side)
 }
 

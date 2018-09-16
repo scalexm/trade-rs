@@ -13,7 +13,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "tick",
+        "ticked",
         move |b| b.iter(|| tick.convert_ticked(1278853).unwrap())
     );
 }

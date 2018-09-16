@@ -2,7 +2,7 @@
 
 use order_book::*;
 
-fn lu(price: Price, size: Size, side: Side) -> LimitUpdate {
+fn lu(price: TickUnit, size: TickUnit, side: Side) -> LimitUpdate {
     LimitUpdate::new(price, size, side)
 }
 

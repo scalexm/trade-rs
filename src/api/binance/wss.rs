@@ -1,6 +1,7 @@
 use order_book::LimitUpdate;
 use tick::ConversionError;
 use api::*;
+use api::timestamp::IntoTimestamped;
 use std::{mem, thread};
 use ws;
 use serde_json;
@@ -172,8 +173,8 @@ impl HandlerImpl {
         Ok(
             LimitUpdate {
                 side,
-                price: self.params.symbol.price_tick.convert_unticked(&l.price)?,
-                size: self.params.symbol.size_tick.convert_unticked(&l.size)?,
+                price: self.params.symbol.price_tick.ticked(&l.price)?,
+                size: self.params.symbol.size_tick.ticked(&l.size)?,
             }
         )
     }
@@ -187,8 +188,8 @@ impl HandlerImpl {
                 let trade: BinanceTrade = serde_json::from_str(json)?;
                 Some(
                     Notification::Trade(Trade {
-                        size: self.params.symbol.size_tick.convert_unticked(trade.q)?,
-                        price: self.params.symbol.price_tick.convert_unticked(trade.p)?,
+                        size: self.params.symbol.size_tick.ticked(trade.q)?,
+                        price: self.params.symbol.price_tick.ticked(trade.p)?,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
                     }.with_timestamp(trade.T))
                 )
@@ -230,9 +231,9 @@ impl HandlerImpl {
                         Notification::OrderConfirmation(OrderConfirmation {
                             order_id: report.c.to_owned(),
                             size: self.params.symbol.size_tick
-                                .convert_unticked(report.q)?,
+                                .ticked(report.q)?,
                             price: self.params.symbol.price_tick
-                                .convert_unticked(report.p)?,
+                                .ticked(report.p)?,
                             side: match report.S {
                                 "BUY" => Side::Bid,
                                 "SELL" => Side::Ask,
@@ -244,22 +245,13 @@ impl HandlerImpl {
                     "TRADE" => Some(
                         Notification::OrderUpdate(OrderUpdate {
                             order_id: report.c.to_owned(),
+                            consumed_size: self.params.symbol.size_tick.ticked(report.l)?,
 
-                            consumed_size: self.params.symbol.size_tick
-                                .convert_unticked(report.l)?,
+                            remaining_size: self.params.symbol.size_tick.ticked(report.q)?
+                                - self.params.symbol.size_tick.ticked(report.z)?,
 
-                            remaining_size:
-                                self.params.symbol.size_tick
-                                    .convert_unticked(report.q)?
-                                -
-                                self.params.symbol.size_tick
-                                    .convert_unticked(report.z)?,
-
-                            consumed_price: self.params.symbol.price_tick
-                                .convert_unticked(report.L)?,
-
-                            commission: self.params.symbol.commission_tick
-                                .convert_unticked(report.n)?,
+                            consumed_price: self.params.symbol.price_tick.ticked(report.L)?,
+                            commission: self.params.symbol.commission_tick.ticked(report.n)?,
                         }.with_timestamp(report.T))
                     ),
 

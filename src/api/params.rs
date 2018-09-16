@@ -15,16 +15,3 @@ pub struct SymbolInfo {
     /// Tick unit for commissions.
     pub commission_tick: Tick,
 }
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// Params needed for an API client.
-pub struct Params {
-    /// Symbol information.
-    pub symbol: SymbolInfo,
-
-    /// WebSocket API address.
-    pub ws_address: String,
-
-    /// HTTP REST API address.
-    pub http_address: String,
-}

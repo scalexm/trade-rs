@@ -11,25 +11,25 @@ use std::cell::Cell;
 /// An order book. Internally uses two `BTreeMap`, one
 /// for the bid side and another one for the ask side.
 pub struct OrderBook {
-    ask: BTreeMap<Price, Size>,
-    bid: BTreeMap<Price, Size>,
+    ask: BTreeMap<TickUnit, TickUnit>,
+    bid: BTreeMap<TickUnit, TickUnit>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Represent a limit update of the order book.
 pub struct LimitUpdate {
     /// Price of the corresponding limit.
-    pub price: Price,
+    pub price: TickUnit,
 
     /// Updated size.
-    pub size: Size,
+    pub size: TickUnit,
 
     /// Side of the corresponding limit.
     pub side: Side,
 }
 
 impl LimitUpdate {
-    pub fn new(price: Price, size: Size, side: Side) -> Self {
+    pub fn new(price: TickUnit, size: TickUnit, side: Side) -> Self {
         LimitUpdate {
             price,
             size,
@@ -51,16 +51,16 @@ impl OrderBook {
     /// 
     /// # Complexity
     /// `O(1)`.
-    pub fn best_bid(&self) -> Price {
+    pub fn best_bid(&self) -> TickUnit {
         self.bid().next().map(|(price, _)| *price).unwrap_or(0)
     }
 
-    /// Return best ask price. If the ask side is empty, return `Price::max_value()`.
+    /// Return best ask price. If the ask side is empty, return `TickUnit::max_value()`.
     /// 
     /// # Complexity
     /// `O(1)`.
-    pub fn best_ask(&self) -> Price {
-        self.ask().next().map(|(price, _)| *price).unwrap_or(Price::max_value())
+    pub fn best_ask(&self) -> TickUnit {
+        self.ask().next().map(|(price, _)| *price).unwrap_or(TickUnit::max_value())
     }
 
     /// Update the given limit with the given updated size.
@@ -91,7 +91,7 @@ impl OrderBook {
     /// 
     /// # Complexity
     /// `O(log(n))` where `n` is the number of limits at the given side.
-    pub fn size_at_limit(&self, side: Side, price: Price) -> Size {
+    pub fn size_at_limit(&self, side: Side, price: TickUnit) -> TickUnit {
         let size = match side {
             Side::Bid => self.bid.get(&price),
             Side::Ask => self.ask.get(&price),
@@ -101,14 +101,14 @@ impl OrderBook {
 
     /// Iterator over the limits at bid, sorted by
     /// descending key.
-    pub fn bid(&self) -> impl Iterator<Item = (&Price, &Size)> {
+    pub fn bid(&self) -> impl Iterator<Item = (&TickUnit, &TickUnit)> {
         self.bid.iter()
                 .rev()
     }
 
     /// Iterator over the limits at ask, sorted by
     /// ascending key.
-    pub fn ask(&self) -> impl Iterator<Item = (&Price, &Size)> {
+    pub fn ask(&self) -> impl Iterator<Item = (&TickUnit, &TickUnit)> {
         self.ask.iter()
     }
 
@@ -182,18 +182,18 @@ pub fn display_size_tick(maybe_tick: Option<Tick>) {
     DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
 }
 
-/// Convert a ticked `Price` in an unticked value with the current thread local price tick.
-pub fn displayable_price(ticked: Price) -> String {
+/// Convert a ticked value in an unticked value with the current thread local price tick.
+pub fn displayable_price(ticked: TickUnit) -> String {
     match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
-        Some(tick) => tick.convert_ticked(ticked).unwrap(),
+        Some(tick) => tick.unticked(ticked).unwrap(),
         None => format!("{}", ticked),
     }
 }
 
-/// Convert a ticked `Size` in an unticked value with the current thread local size tick.
-pub fn displayable_size(ticked: Size) -> String {
+/// Convert a ticked value in an unticked value with the current thread local size tick.
+pub fn displayable_size(ticked: TickUnit) -> String {
     match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
-        Some(tick) => tick.convert_ticked(ticked).unwrap(),
+        Some(tick) => tick.unticked(ticked).unwrap(),
         None => format!("{}", ticked),
     }
 }

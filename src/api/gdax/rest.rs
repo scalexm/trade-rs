@@ -4,6 +4,7 @@ use hyper::{Method, Request, self};
 use base64;
 use super::errors::{RestError, ErrorKinded};
 use api;
+use api::timestamp::timestamp_ms;
 use failure::Fail;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
@@ -150,9 +151,9 @@ impl Client {
         let time_in_force = order.time_in_force;
 
         let order = GdaxOrder {
-            size: &self.params.symbol.size_tick.convert_ticked(order.size)
+            size: &self.params.symbol.size_tick.unticked(order.size)
                 .expect("bad size tick"),
-            price: &self.params.symbol.price_tick.convert_ticked(order.price)
+            price: &self.params.symbol.price_tick.unticked(order.price)
                 .expect("bad price tick"),
             side: &order.side.as_str(),
             product_id: &self.params.symbol.name,

@@ -5,6 +5,7 @@ mod rest;
 pub mod errors;
 
 use api::*;
+use api::timestamp::IntoTimestamped;
 use openssl::pkey::{PKey, Private};
 use base64;
 use chashmap::CHashMap;
