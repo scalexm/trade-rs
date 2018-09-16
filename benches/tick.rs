@@ -8,12 +8,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     let tick = Tick::new(1000);
 
     c.bench_function(
-        "unticked",
+        "ticked",
         move |b| b.iter(|| tick.ticked("1278.853").unwrap())
     );
 
     c.bench_function(
-        "ticked",
+        "unticked",
         move |b| b.iter(|| tick.unticked(1278853).unwrap())
     );
 }

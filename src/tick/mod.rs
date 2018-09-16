@@ -122,19 +122,45 @@ impl Tick {
     /// 
     /// # Panics
     /// Panic in case of overflow.
+    /// Should correctly handle numbers up to `100,000,000,000.00000001` when using a 10^-8
+    /// precision, which seems ok. 
     pub fn ticked(self, unticked: &str) -> Result<TickUnit, ConversionError> {
-        let mut parts = unticked.split('.').take(2);
-        let (int, fract) = match (parts.next(), parts.next()) {
-            (Some(int), Some(fract)) => (int, fract),
-            (Some(int), None) => (int, ""),
-            (None, _) => return Err(ConversionError::unticked(unticked.to_owned(), self)),
-        };
+        let mut denom: u128 = 0;
 
-        let denom = 10_u128.pow(fract.len() as u32);
+        let mut int: u64 = 0;
+        let mut fract: u64 = 0;
+        let mut base: u64 = 1;
+        let mut left = false;
+        for c in unticked.chars().rev() {
+            let digit = match c {
+                '0' ... '9' => (c as u64) - ('0' as u64),
+                '.' => {
+                    left = true;
+                    denom = u128::from(base);
+                    base = 1;
+                    continue;
+                }
+                _ => return Err(ConversionError::unticked(unticked.to_owned(), self)),
+            };
 
-        let int = int.parse::<u128>().unwrap_or(0);
-        let fract = fract.parse::<u128>().unwrap_or(0);
-        let num = (int * denom + fract) * u128::from(self.0);
+            if left {
+                int = int.checked_add(digit.checked_mul(base).unwrap()).unwrap();
+            } else {
+                fract = fract.checked_add(digit.checked_mul(base).unwrap()).unwrap();
+            }
+            base = base.checked_mul(10).unwrap();
+        }
+
+        if !left {
+            int = fract;
+            fract = 0;
+            denom = 1;
+        }
+
+        let num = u128::from(int)
+            .checked_mul(denom).unwrap()
+            .checked_add(u128::from(fract)).unwrap()
+            .checked_mul(u128::from(self.0)).unwrap();
 
         if num % denom != 0 {
             return Err(ConversionError::unticked(unticked.to_owned(), self));
@@ -147,28 +173,47 @@ impl Tick {
     ///
     /// # Errors
     /// Return `Err` if the number of ticks per unit does not divide some power of 10.
+    /// 
+    /// # Panics
+    /// Panic in case of overflow.
     pub fn unticked(self, ticked: TickUnit) -> Result<String, ConversionError> {
-        let ticks_per_unit = u128::from(self.0);
-        let mut pad = 0;
-        let mut pow = 1; // `pow` may reach 10^20 which does not fit in a `u64`
-        while ticks_per_unit > pow {
+        let mut pad: usize = 0;
+        let mut pow: u64 = 1;
+        while self.0 > pow {
             pad += 1;
-            pow *= 10;
+            pow = pow.checked_mul(10).unwrap();
         }
 
-        if pow % ticks_per_unit != 0 {
+        if pow % self.0 != 0 {
             return Err(ConversionError::ticked(ticked.to_owned(), self));
         }
 
-        let ticked = u128::from(ticked);
-        let int = ticked / ticks_per_unit;
-        let fract = (pow * ticked / ticks_per_unit) % pow;
+        let int = ticked / self.0;
+
+        let pow = u128::from(pow);
+        let fract = (pow * u128::from(ticked) / u128::from(self.0)) % pow; // cannot overflow
+        let fract: u64 = fract.try_into().unwrap();
+
+        let write = |mut num: u64, out: &mut [char], mut used: usize| {
+            loop {
+                let digit = (num % 10) as u32;
+                out[used] = std::char::from_digit(digit, 10).unwrap();
+
+                num /= 10;
+                used += 1;
+
+                if num == 0 {
+                    break;
+                }
+            }
+            used
+        };
         
-        Ok(format!(
-            "{0}.{1:02$}",
-            int,
-            fract,
-            pad
-        ))
+        let mut out = ['0'; 21];
+        let _ = write(fract, &mut out[..], 0);
+        out[pad] = '.';
+        let used = write(int, &mut out[..], pad + 1);
+        
+        Ok(out[..used].iter().rev().collect())
     }
 }

@@ -76,23 +76,34 @@ fn empty_int_part() {
 
 #[test]
 fn bad_int_part() {
-    assert_eq!(
-        Ok(0),
-        Tick::new(10).ticked("abc")
+    assert!(
+        Tick::new(10).ticked("abc").is_err()
     );
 
-    assert_eq!(
-        Ok(5),
-        Tick::new(10).ticked("abc.5")
+    assert!(
+        Tick::new(10).ticked("abc.5").is_err()
     );
 }
 
 #[test]
 fn bad_fract_part() {
-    assert_eq!(
-        Ok(50),
-        Tick::new(10).ticked("5.abc")
+    assert!(
+        Tick::new(10).ticked("5.abc").is_err()
     );
+}
+
+#[test]
+fn do_not_overflow_ticked() {
+    assert_eq!(
+        Ok(10_000_000_000_000_000_001),
+        Tick::new(100_000_000).ticked("100000000000.00000001")
+    )
+}
+
+#[test]
+#[should_panic]
+fn overflow_ticked() {
+    let _ = Tick::new(100_000_000).ticked("1000000000000.00000001");
 }
 
 #[test]
@@ -136,5 +147,14 @@ fn convert_ticked() {
 
     assert!(
         Tick::new(23).unticked(Tick::new(10).ticked("75.4").unwrap()).is_err()
+    );
+}
+
+#[test]
+fn do_not_overflow_unticked() {
+    let value = Tick::new(100_000_000).ticked("100000000000.00000001").unwrap();
+    assert_eq!(
+        Ok("100000000000.00000001".to_owned()),
+        Tick::new(100_000_000).unticked(value)
     );
 }
