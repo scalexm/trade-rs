@@ -1,8 +1,4 @@
 Cargo.lock
 target/
 rls/
-api-prompt/params.gdax.json
-api-prompt/params.binance.json
-api-prompt/keys.gdax.json
-api-prompt/keys.gdax.sandbox.json
-api-prompt/keys.binance.json
+examples/prompt/*.json
