@@ -1,5 +1,5 @@
 use serde_derive::{Serialize, Deserialize};
-use crate::Tick;
+use crate::tick::Tick;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A type carrying information about the traded symbol.

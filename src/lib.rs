@@ -7,6 +7,7 @@
 #![feature(try_from)]
 #![feature(never_type)]
 #![feature(crate_visibility_modifier)]
+#![feature(no_panic_pow)]
 
 pub mod api;
 pub mod order_book;
@@ -14,7 +15,7 @@ pub mod tick;
 
 use serde_derive::{Serialize, Deserialize};
 
-pub use self::tick::{Tick, TickUnit};
+pub use self::tick::TickUnit;
 pub use self::order_book::OrderBook;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]

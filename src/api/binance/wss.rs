@@ -37,7 +37,7 @@ impl Client {
             if let Some(listen_key) = listen_key {
                 address += &format!("/{}", listen_key);
             }
-            debug!("Initiating WebSocket connection at {}", address);
+            debug!("initiating WebSocket connection at {}", address);
 
             if let Err(err) = ws::connect(address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), true, HandlerImpl{
@@ -320,7 +320,7 @@ impl HandlerImpl {
     {
         match state.rcv.try_recv() {
             Ok(book) => {
-                debug!("Received LOB snapshot");
+                debug!("received LOB snapshot");
                 match self.process_book_snapshot(book, state.events) {
                     Ok(notif) => {
                         self.book_snapshot_state = BookSnapshotState::Ok;
@@ -371,7 +371,7 @@ impl HandlerImpl {
             self.symbol.name()
         ).parse().expect("invalid address");
 
-        debug!("Initiating LOB request at `{}`", address);
+        debug!("initiating LOB request at `{}`", address);
 
         thread::spawn(move || {
             let https = match hyper_tls::HttpsConnector::new(2) {

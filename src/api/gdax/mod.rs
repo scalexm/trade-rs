@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use futures::prelude::*;
 use serde_derive::{Serialize, Deserialize};
+use log::debug;
 use crate::api::{
     self,
     Params,
@@ -65,7 +66,8 @@ pub struct Client {
 impl Client {
     /// Create a new GDAX API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will forward
-    /// the user data stream.
+    /// the user data stream. This method will block, fetching the available symbols
+    /// from GDAX.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         let keys = match key_pair {
             Some(pair) => {
@@ -80,12 +82,20 @@ impl Client {
             None => None,
         };
 
-        Ok(Client {
+        let mut client = Client {
             params,
             keys,
             order_ids: Arc::new(CHashMap::new()),
             symbols: HashMap::new(),
-        })
+        };
+
+        use tokio::runtime::current_thread;
+        debug!("requesting symbols");
+        client.symbols = current_thread::Runtime::new()?
+            .block_on(client.get_symbols())?;
+        debug!("received symbols");
+
+        Ok(client)
     }
 }
 
@@ -118,10 +128,6 @@ impl ApiClient for Client {
         Box::new(Ok(().timestamped()).into_future())
     }
 
-    fn params(&self) -> &Params {
-        &self.params
-    }
-
     fn balances(&self)
         -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
     {
@@ -132,7 +138,6 @@ impl ApiClient for Client {
 impl GenerateOrderId for Client {
     fn new_order_id(_: &str) -> String {
         use uuid::Uuid;
-
         Uuid::new_v4().to_string()
     }
 }

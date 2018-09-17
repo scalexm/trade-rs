@@ -21,7 +21,7 @@ use crate::api::{
     Notification,
     Balances,
 };
-use crate::api::symbol::{Symbol, SymbolName, WithSymbol};
+use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::timestamp::Timestamped;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -68,8 +68,11 @@ impl Client {
     /// Create a new binance API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will request
     /// a listen key for the user data stream. The request will block the thread.
+    /// The method will also block when fetching the available symbols from binance.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
-        match key_pair {
+        use tokio::runtime::current_thread;
+
+        let mut client = match key_pair {
             Some(pair) => {
                 let secret_key = PKey::hmac(pair.secret_key.as_bytes())?;
 
@@ -83,22 +86,26 @@ impl Client {
                     symbols: HashMap::new(),
                 };
 
-                use tokio::runtime::current_thread;
-                debug!("Requesting listen key");
-                let listen_key = current_thread::Runtime::new()
-                    .unwrap()
+                debug!("requesting listen key");
+                let listen_key = current_thread::Runtime::new()?
                     .block_on(client.get_listen_key())?;
-                debug!("Received listen key");
+                debug!("received listen key");
 
                 client.keys.as_mut().unwrap().listen_key = listen_key;
-                Ok(client)
+                client
             }
-            None => Ok(Client {
+            None => Client {
                 params,
                 keys: None,
                 symbols: HashMap::new(),
-            })
-        }
+            }
+        };
+
+        debug!("requesting symbols");
+        client.symbols = current_thread::Runtime::new()?
+            .block_on(client.get_symbols())?;
+        debug!("received symbols");
+        Ok(client)
     }
 }
 
@@ -129,10 +136,6 @@ impl ApiClient for Client {
         -> Box<Future<Item = Timestamped<()>, Error = api::errors::Error> + Send + 'static>
     {
         self.ping_impl()
-    }
-
-    fn params(&self) -> &Params {
-        &self.params
     }
 
     fn balances(&self)

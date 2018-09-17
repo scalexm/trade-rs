@@ -56,6 +56,7 @@ pub struct Order {
     price: TickUnit,
     size: TickUnit,
     side: Side,
+    #[serde(rename = "type")]
     type_: OrderType,
     time_in_force: TimeInForce,
     time_window: u64,
@@ -278,7 +279,7 @@ pub struct Balance {
     pub locked: String,
 }
 
-/// A wrapper over a (symbol name) => (balance) `HashMap`.
+/// A wrapper over a (currency name) => (balance) `HashMap`.
 pub type Balances = HashMap<String, Balance>;
 
 /// A trait implemented by clients of various exchanges API.
@@ -307,7 +308,4 @@ pub trait ApiClient: GenerateOrderId {
     /// Retrieve balances for this account.
     fn balances(&self)
         -> Box<Future<Item = Balances, Error = errors::Error> + Send + 'static>;
-    
-    /// Return underlying `Params`.
-    fn params(&self) -> &Params;
 }

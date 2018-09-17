@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use arrayvec::ArrayString;
 use serde_derive::{Serialize, Deserialize};
-use crate::Tick;
+use crate::tick::Tick;
 
 /// A small string type used for symbol names.
 pub type SymbolName = ArrayString<[u8; 10]>;
@@ -16,6 +16,20 @@ pub struct Symbol {
 }
 
 impl Symbol {
+    crate fn new(name: &str, price_tick: Tick, size_tick: Tick) -> Option<Self> {
+        let name = match SymbolName::from(name) {
+            Ok(name) => name,
+            Err(..) => return None,
+        };
+
+        Some(Symbol {
+            name,
+            price_tick,
+            size_tick,
+            commission_tick: Tick::new(1),
+        })
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }

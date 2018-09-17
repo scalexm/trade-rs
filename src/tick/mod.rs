@@ -220,4 +220,22 @@ impl Tick {
         }
         Ok(unsafe { String::from_utf8_unchecked(s) })
     }
+
+    crate fn tick_size(unticked: &str) -> Option<Tick> {
+        if unticked.starts_with("1") || unticked.starts_with("1.") {
+            return Some(Tick::new(1));
+        }
+
+        let index = unticked.chars().position(|c| c == '.')?;
+
+        let fract = unticked[index + 1 ..].parse::<u64>().ok()?;
+        let exp = unticked[index + 1 ..].len();
+
+        let pow = 10u64.checked_pow(exp as u32)?;
+        if pow % fract != 0 {
+            return None;
+        }
+
+        Some(Tick::new(pow / fract))
+    }
 }

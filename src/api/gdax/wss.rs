@@ -18,20 +18,19 @@ use crate::api::{
 use crate::api::symbol::Symbol;
 use crate::api::wss;
 use crate::api::timestamp::{timestamp_ms, IntoTimestamped};
-use crate::api::gdax::{convert_str_timestamp, Keys, Client, Params};
+use crate::api::gdax::{convert_str_timestamp, Keys, Client};
 
 impl Client {
     crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
-        let params = self.params.clone();
+        let ws_address = self.params.ws_address.clone();
         let keys = self.keys.clone();
         let order_ids = self.order_ids.clone();
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
-            debug!("Initiating WebSocket connection at {}", params.ws_address);
+            debug!("initiating WebSocket connection at {}", ws_address);
             
-            if let Err(err) = ws::connect(params.ws_address.as_ref(), |out| {
+            if let Err(err) = ws::connect(ws_address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), false, HandlerImpl {
-                    params: params.clone(),
                     symbol,
                     state: SubscriptionState::NotSubscribed,
                     keys: keys.clone(),
@@ -55,7 +54,6 @@ enum SubscriptionState {
 }
 
 struct HandlerImpl {
-    params: Params,
     symbol: Symbol,
     state: SubscriptionState,
     keys: Option<Keys>,

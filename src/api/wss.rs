@@ -92,7 +92,7 @@ impl<T: HandlerImpl> ws::Handler for Handler<T> {
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(text) = msg {
             if let Err(err) = self.inner.on_message(&text, &self.snd) {
-                error!("Message handling encountered error: `{}`", err)
+                error!("message handling encountered error: `{}`", err)
             }
         }
         Ok(())

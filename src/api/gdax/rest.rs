@@ -2,9 +2,11 @@ use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request};
 use futures::prelude::*;
 use failure::Fail;
-use log::{warn, debug};
+use log::{warn, debug, error};
+use std::collections::HashMap;
 use serde_derive::{Serialize, Deserialize};
-use crate::{Side};
+use crate::Side;
+use crate::tick::Tick;
 use crate::api::{
     self,
     TimeInForce,
@@ -16,6 +18,7 @@ use crate::api::{
     Balance,
     Balances
 };
+use crate::api::symbol::Symbol;
 use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
 use crate::api::gdax::{convert_str_timestamp, Client};
 use crate::api::gdax::errors::{RestError, ErrorKinded};
@@ -45,6 +48,19 @@ struct GdaxAccount<'a> {
     currency: &'a str,
     available: &'a str,
     hold: &'a str,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct GdaxProduct<'a> {
+    id: &'a str,
+    base_currency: &'a str,
+    quote_increment: &'a str,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct GdaxCurrency<'a> {
+    id: &'a str,
+    min_size: &'a str,
 }
 
 trait AsStr {
@@ -82,35 +98,33 @@ impl Client {
             + 'static
         > where RestError: ErrorKinded<K>
     {
-        let keys = self.keys.as_ref().expect(
-            "cannot perform an HTTP request without a GDAX key pair"
-        );
-
         let address = format!(
             "{}/{}",
             self.params.http_address,
             endpoint,
         );
 
-        let timestamp = timestamp_ms() as f64 / 1000.;
+        let mut request = Request::builder();
 
-        let mut signer = Signer::new(MessageDigest::sha256(), &keys.secret_key).unwrap();
-        let what = format!("{}{}/{}{}", timestamp, method, endpoint, body);
-        signer.update(what.as_bytes()).unwrap();
-        let signature = base64::encode(&signer.sign_to_vec().unwrap());
+        if let Some(keys) = self.keys.as_ref() {
+            let timestamp = timestamp_ms() as f64 / 1000.;
+            let mut signer = Signer::new(MessageDigest::sha256(), &keys.secret_key).unwrap();
+            let what = format!("{}{}/{}{}", timestamp, method, endpoint, body);
+            signer.update(what.as_bytes()).unwrap();
+            let signature = base64::encode(&signer.sign_to_vec().unwrap());
 
-        let request = Request::builder()
-            .method(method)
+            request.header("CB-ACCESS-KEY", keys.api_key.as_bytes())
+                .header("CB-ACCESS-SIGN", signature.as_bytes())
+                .header("CB-ACCESS-TIMESTAMP", format!("{}", timestamp).as_bytes())
+                .header("CB-ACCESS-PASSPHRASE", keys.pass_phrase.as_bytes());
+        }
+
+        request.method(method)
             .uri(&address)
-            .header("CB-ACCESS-KEY", keys.api_key.as_bytes())
-            .header("CB-ACCESS-SIGN", signature.as_bytes())
-            .header("CB-ACCESS-TIMESTAMP", format!("{}", timestamp).as_bytes())
-            .header("CB-ACCESS-PASSPHRASE", keys.pass_phrase.as_bytes())
             .header("User-Agent", &b"hyper"[..])
-            .header("Content-Type", &b"application/json"[..])
-            .body(body.into());
+            .header("Content-Type", &b"application/json"[..]);
         
-        let request = match request {
+        let request = match request.body(body.into()) {
             Ok(request) => request,
             Err(err) => return Box::new(
                 Err(err)
@@ -244,7 +258,7 @@ impl Client {
     crate fn balances_impl(&self)
         -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
     {
-        let fut = self.request("accounts", Method::GET, String::new()).and_then(move |body| {
+        let fut = self.request("accounts", Method::GET, String::new()).and_then(|body| {
             let accounts: Vec<GdaxAccount> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -256,6 +270,56 @@ impl Client {
                 })
             }).collect();
             Ok(balances)
+        });
+        Box::new(fut)
+    }
+
+    crate fn get_symbols(&self)
+        -> Box<Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static>
+    {
+        let fut = self.request("products", Method::GET, String::new())
+            .join(self.request("currencies", Method::GET, String::new()))
+            .and_then(|(body_products, body_currencies)|
+        {
+            let products: Vec<GdaxProduct> = serde_json::from_slice(&body_products)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
+
+            let currencies: Vec<GdaxCurrency> = serde_json::from_slice(&body_currencies)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
+
+            let currencies: HashMap<_, _> = currencies.into_iter()
+                .map(|c| (c.id.to_owned(), c))
+                .collect();
+
+            let mut symbols = HashMap::new();
+            for p in products {
+                let price_tick = match Tick::tick_size(p.quote_increment) {
+                    Some(tick) => tick,
+                    None => {
+                        error!("cannot read price tick for symbol `{}`", p.id);
+                        continue;
+                    }
+                };
+
+                let size_tick = match currencies.get(p.base_currency)
+                    .and_then(|c| Tick::tick_size(c.min_size))
+                {
+                    Some(tick) => tick,
+                    None => {
+                        error!("cannot read size tick for symbol `{}`", p.id);
+                        continue;
+                    }
+                };
+
+                if let Some(symbol) = Symbol::new(p.id, price_tick, size_tick) {
+                    symbols.insert(symbol.name().to_lowercase(), symbol);
+                } else {
+                    error!("symbol name too long: `{}`", p.id);
+                }
+            }
+            Ok(symbols)
         });
         Box::new(fut)
     }

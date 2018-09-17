@@ -158,3 +158,41 @@ fn do_not_overflow_unticked() {
         Tick::new(100_000_000).unticked(value)
     );
 }
+
+#[test]
+fn tick_size() {
+    assert_eq!(
+        Some(Tick::new(1)),
+        Tick::tick_size("1")
+    );
+
+    assert_eq!(
+        Some(Tick::new(1)),
+        Tick::tick_size("1.")
+    );
+
+    assert_eq!(
+        Some(Tick::new(1)),
+        Tick::tick_size("1.00")
+    );
+
+    assert_eq!(
+        Some(Tick::new(100)),
+        Tick::tick_size("0.01000")
+    );
+
+    assert_eq!(
+        Some(Tick::new(100_000_000)),
+        Tick::tick_size(".00000001")
+    );
+
+    assert_eq!(
+        Some(Tick::new(2)),
+        Tick::tick_size(".5")
+    );
+
+    assert_eq!(
+        Some(Tick::new(400)),
+        Tick::tick_size("0.0025")
+    );
+}

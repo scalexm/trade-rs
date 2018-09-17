@@ -1,6 +1,7 @@
 use std::fmt;
 use std::cell::Cell;
-use crate::{OrderBook, Tick, TickUnit};
+use crate::{OrderBook, TickUnit};
+use crate::tick::Tick;
 
 thread_local! {
     static DISPLAY_LIMIT: Cell<usize> = Cell::new(5);

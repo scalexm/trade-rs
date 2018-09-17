@@ -2,9 +2,12 @@ use std::fmt;
 use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
 use hyper::{Method, Request, Body};
 use futures::prelude::*;
+use std::collections::HashMap;
 use failure::Fail;
 use serde_derive::Deserialize;
+use log::error;
 use crate::Side;
+use crate::tick::Tick;
 use crate::api::{
     self,
     OrderType,
@@ -14,6 +17,7 @@ use crate::api::{
     Cancel,
     CancelAck,
 };
+use crate::api::symbol::Symbol;
 use crate::api::binance::Client;
 use crate::api::binance::errors::{RestError, ErrorKinded};
 use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
@@ -80,6 +84,29 @@ struct BinanceAccountInformation<'a> {
 #[allow(non_snake_case)]
 struct BinanceListenKey<'a> {
     listenKey: &'a str,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
+#[serde(tag = "filterType")]
+enum BinanceFilter<'a> {
+    PRICE_FILTER { tickSize: &'a str },
+    LOT_SIZE { stepSize: &'a str },
+    MIN_NOTIONAL,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct BinanceSymbol<'a> {
+    symbol: &'a str,
+    #[serde(borrow)]
+    filters: Vec<BinanceFilter<'a>>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct BinanceExchangeInfo<'a> {
+    #[serde(borrow)]
+    symbols: Vec<BinanceSymbol<'a>>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -312,6 +339,61 @@ impl Client {
                 })
             }).collect();
             Ok(balances)
+        });
+        Box::new(fut)
+    }
+
+    crate fn get_symbols(&self)
+        -> Box<Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static>
+    {
+        let query = QueryString::new();
+        let fut = self.request("api/v1/exchangeInfo", Method::GET, query, Signature::No)
+            .and_then(|body|
+        {
+            let info: BinanceExchangeInfo = serde_json::from_slice(&body)
+                .map_err(api::errors::RequestError::new)
+                .map_err(api::errors::ApiError::RequestError)?;
+
+            let mut symbols = HashMap::new();
+            for symbol in info.symbols.into_iter() {
+                let mut price_tick = None;
+                let mut size_tick = None;
+
+                for filter in symbol.filters {
+                    #[allow(non_snake_case)]
+                    match filter {
+                        BinanceFilter::PRICE_FILTER { tickSize } => {
+                            price_tick = Tick::tick_size(tickSize);
+                        }
+                        BinanceFilter::LOT_SIZE { stepSize } => {
+                            size_tick = Tick::tick_size(stepSize);
+                        }
+                        _ => (),
+                    }
+                }
+
+                if price_tick.is_none() {
+                    error!("cannot read price tick for symbol `{}`", symbol.symbol);
+                    continue;
+                }
+
+                if size_tick.is_none() {
+                    error!("cannot read size tick for symbol `{}`", symbol.symbol);
+                    continue;
+                }
+
+                if let Some(symbol) = Symbol::new(
+                    symbol.symbol,
+                    price_tick.unwrap(),
+                    size_tick.unwrap()
+                )
+                {
+                    symbols.insert(symbol.name().to_lowercase(), symbol);
+                } else {
+                    error!("symbol name too long: `{}`", symbol.symbol);
+                }
+            }
+            Ok(symbols)
         });
         Box::new(fut)
     }
