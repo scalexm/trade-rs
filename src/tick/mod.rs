@@ -194,10 +194,10 @@ impl Tick {
         let fract = (pow * u128::from(ticked) / u128::from(self.0)) % pow; // cannot overflow
         let fract: u64 = fract.try_into().unwrap();
 
-        let write = |mut num: u64, out: &mut [char], mut used: usize| {
+        fn write(mut num: u64, out: &mut [u8], mut used: usize) -> usize {
             loop {
-                let digit = (num % 10) as u32;
-                out[used] = std::char::from_digit(digit, 10).unwrap();
+                let digit = (num % 10) as u8;
+                out[used] = b'0' + digit;
 
                 num /= 10;
                 used += 1;
@@ -209,11 +209,15 @@ impl Tick {
             used
         };
         
-        let mut out = ['0'; 21];
+        let mut out = [b'0'; 21];
         let _ = write(fract, &mut out[..], 0);
-        out[pad] = '.';
+        out[pad] = b'.';
         let used = write(int, &mut out[..], pad + 1);
         
-        Ok(out[..used].iter().rev().collect())
+        let mut s = Vec::with_capacity(used);
+        for c in out[..used].iter().rev() {
+            s.push(*c as u8);
+        }
+        Ok(unsafe { String::from_utf8_unchecked(s) })
     }
 }
