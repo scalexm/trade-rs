@@ -16,6 +16,7 @@ use crate::api::{
     OrderUpdate,
     OrderExpiration,
 };
+use crate::api::symbol::Symbol;
 use crate::api::wss;
 use crate::api::timestamp::{Timestamped, IntoTimestamped};
 use crate::api::binance::Client;
@@ -23,7 +24,7 @@ use crate::api::binance::errors::RestError;
 
 
 impl Client {
-    crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
+    crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
         let params = self.params.clone();
         let listen_key = self.keys.as_ref().map(|keys| keys.listen_key.clone());
         let (snd, rcv) = unbounded();
@@ -41,6 +42,7 @@ impl Client {
             if let Err(err) = ws::connect(address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), true, HandlerImpl{
                     params: params.clone(),
+                    symbol,
                     book_snapshot_state: BookSnapshotState::None,
                     previous_u: None,
                 })
@@ -84,6 +86,7 @@ enum BookSnapshotState {
 
 struct HandlerImpl {
     params: Params,
+    symbol: Symbol,
     book_snapshot_state: BookSnapshotState,
 
     /// We keep track of the last `u` indicator sent by binance, this is used for checking
@@ -185,8 +188,8 @@ impl HandlerImpl {
         Ok(
             LimitUpdate {
                 side,
-                price: self.params.symbol.price_tick.ticked(&l.price)?,
-                size: self.params.symbol.size_tick.ticked(&l.size)?,
+                price: self.symbol.price_tick().ticked(&l.price)?,
+                size: self.symbol.size_tick().ticked(&l.size)?,
             }
         )
     }
@@ -200,8 +203,8 @@ impl HandlerImpl {
                 let trade: BinanceTrade = serde_json::from_str(json)?;
                 Some(
                     Notification::Trade(Trade {
-                        size: self.params.symbol.size_tick.ticked(trade.q)?,
-                        price: self.params.symbol.price_tick.ticked(trade.p)?,
+                        size: self.symbol.size_tick().ticked(trade.q)?,
+                        price: self.symbol.price_tick().ticked(trade.p)?,
                         maker_side: if trade.m { Side::Bid } else { Side::Ask },
                     }.with_timestamp(trade.T))
                 )
@@ -242,10 +245,8 @@ impl HandlerImpl {
                     "NEW" => Some(
                         Notification::OrderConfirmation(OrderConfirmation {
                             order_id: report.c.to_owned(),
-                            size: self.params.symbol.size_tick
-                                .ticked(report.q)?,
-                            price: self.params.symbol.price_tick
-                                .ticked(report.p)?,
+                            size: self.symbol.size_tick().ticked(report.q)?,
+                            price: self.symbol.price_tick().ticked(report.p)?,
                             side: match report.S {
                                 "BUY" => Side::Bid,
                                 "SELL" => Side::Ask,
@@ -257,13 +258,13 @@ impl HandlerImpl {
                     "TRADE" => Some(
                         Notification::OrderUpdate(OrderUpdate {
                             order_id: report.c.to_owned(),
-                            consumed_size: self.params.symbol.size_tick.ticked(report.l)?,
+                            consumed_size: self.symbol.size_tick().ticked(report.l)?,
 
-                            remaining_size: self.params.symbol.size_tick.ticked(report.q)?
-                                - self.params.symbol.size_tick.ticked(report.z)?,
+                            remaining_size: self.symbol.size_tick().ticked(report.q)?
+                                - self.symbol.size_tick().ticked(report.z)?,
 
-                            consumed_price: self.params.symbol.price_tick.ticked(report.L)?,
-                            commission: self.params.symbol.commission_tick.ticked(report.n)?,
+                            consumed_price: self.symbol.price_tick().ticked(report.L)?,
+                            commission: self.symbol.commission_tick().ticked(report.n)?,
                         }.with_timestamp(report.T))
                     ),
 
@@ -367,7 +368,7 @@ impl HandlerImpl {
         let address = format!(
             "{}/api/v1/depth?symbol={}&limit=1000",
             self.params.http_address,
-            self.params.symbol.name.to_uppercase()
+            self.symbol.name()
         ).parse().expect("invalid address");
 
         debug!("Initiating LOB request at `{}`", address);

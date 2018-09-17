@@ -15,12 +15,13 @@ use crate::api::{
     Trade,
     OrderExpiration,
 };
+use crate::api::symbol::Symbol;
 use crate::api::wss;
 use crate::api::timestamp::{timestamp_ms, IntoTimestamped};
 use crate::api::gdax::{convert_str_timestamp, Keys, Client, Params};
 
 impl Client {
-    crate fn new_stream(&self) -> UnboundedReceiver<Notification> {
+    crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
         let params = self.params.clone();
         let keys = self.keys.clone();
         let order_ids = self.order_ids.clone();
@@ -31,6 +32,7 @@ impl Client {
             if let Err(err) = ws::connect(params.ws_address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), false, HandlerImpl {
                     params: params.clone(),
+                    symbol,
                     state: SubscriptionState::NotSubscribed,
                     keys: keys.clone(),
                     orders: HashMap::new(),
@@ -54,6 +56,7 @@ enum SubscriptionState {
 
 struct HandlerImpl {
     params: Params,
+    symbol: Symbol,
     state: SubscriptionState,
     keys: Option<Keys>,
 
@@ -158,8 +161,8 @@ impl HandlerImpl {
         Ok(
             LimitUpdate {
                 side,
-                price: self.params.symbol.price_tick.ticked(l.0)?,
-                size: self.params.symbol.size_tick.ticked(l.1)?,
+                price: self.symbol.price_tick().ticked(l.0)?,
+                size: self.symbol.size_tick().ticked(l.1)?,
             }
         )
     }
@@ -226,8 +229,8 @@ impl HandlerImpl {
                 let trade: GdaxMatch = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(trade.time)?;
                 
-                let size = self.params.symbol.size_tick.ticked(trade.size)?;
-                let price = self.params.symbol.price_tick.ticked(trade.price)?;
+                let size = self.symbol.size_tick().ticked(trade.size)?;
+                let price = self.symbol.price_tick().ticked(trade.price)?;
 
                 // An order which is about us
                 if trade.profile_id.is_some() {
@@ -267,8 +270,8 @@ impl HandlerImpl {
                 let received: GdaxReceived = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(received.time)?;
 
-                let size = self.params.symbol.size_tick.ticked(received.size)?;
-                let price = self.params.symbol.price_tick.ticked(received.price)?;
+                let size = self.symbol.size_tick().ticked(received.size)?;
+                let price = self.symbol.price_tick().ticked(received.price)?;
                 let side = self.convert_gdax_side(received.side)?;
 
                 // The order id specified by the user, which defaults to the server order id
@@ -328,7 +331,7 @@ impl HandlerImpl {
 
 impl wss::HandlerImpl for HandlerImpl {
     fn on_open(&mut self, out: &ws::Sender) -> ws::Result<()> {
-        let product_ids = [self.params.symbol.name.as_ref()];
+        let product_ids = [self.symbol.name()];
         let mut channels = vec![
             GdaxChannel::Channel("level2"),
             GdaxChannel::Channel("matches"),

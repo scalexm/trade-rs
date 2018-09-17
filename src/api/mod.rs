@@ -15,6 +15,7 @@ use crate::{TickUnit, Side};
 use crate::order_book::LimitUpdate;
 
 use self::timestamp::Timestamped;
+use self::symbol::{Symbol, WithSymbol};
 pub use self::params::SymbolInfo;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -286,8 +287,10 @@ pub trait ApiClient: GenerateOrderId {
     /// notifications.
     type Stream: Stream<Item = Notification, Error = ()> + Send + 'static;
 
+    fn find_symbol(&self, symbol: &str) -> Option<Symbol>;
+
     /// Start streaming notifications.
-    fn stream(&self) -> Self::Stream;
+    fn stream(&self, symbol: Symbol) -> Self::Stream;
 
     /// Send an order to the exchange.
     fn order(&self, order: &Order)
@@ -300,7 +303,6 @@ pub trait ApiClient: GenerateOrderId {
     /// Send a ping to the exchange.
     fn ping(&self)
         -> Box<Future<Item = Timestamped<()>, Error = errors::Error> + Send + 'static>;
-    
 
     /// Retrieve balances for this account.
     fn balances(&self)

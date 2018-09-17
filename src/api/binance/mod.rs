@@ -5,6 +5,7 @@ mod rest;
 pub mod errors;
 
 use openssl::pkey::{PKey, Private};
+use std::collections::HashMap;
 use futures::prelude::*;
 use log::debug;
 use serde_derive::{Serialize, Deserialize};
@@ -20,6 +21,7 @@ use crate::api::{
     Notification,
     Balances,
 };
+use crate::api::symbol::{Symbol, SymbolName, WithSymbol};
 use crate::api::timestamp::Timestamped;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -59,6 +61,7 @@ struct Keys {
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
+    symbols: HashMap<String, Symbol>,
 }
 
 impl Client {
@@ -77,6 +80,7 @@ impl Client {
                         secret_key,
                         listen_key: String::new(),
                     }),
+                    symbols: HashMap::new(),
                 };
 
                 use tokio::runtime::current_thread;
@@ -92,6 +96,7 @@ impl Client {
             None => Ok(Client {
                 params,
                 keys: None,
+                symbols: HashMap::new(),
             })
         }
     }
@@ -100,8 +105,12 @@ impl Client {
 impl ApiClient for Client {
     type Stream = futures::sync::mpsc::UnboundedReceiver<Notification>;
 
-    fn stream(&self) -> Self::Stream {
-        self.new_stream()
+    fn find_symbol(&self, symbol: &str) -> Option<Symbol> {
+        self.symbols.get(&symbol.to_lowercase()).cloned()
+    }
+
+    fn stream(&self, symbol: Symbol) -> Self::Stream {
+        self.new_stream(symbol)
     }
 
     fn order(&self, order: &Order)

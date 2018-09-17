@@ -19,6 +19,18 @@ impl Symbol {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    pub fn price_tick(&self) -> Tick {
+        self.price_tick
+    }
+
+    pub fn size_tick(&self) -> Tick {
+        self.size_tick
+    }
+
+    pub fn commission_tick(&self) -> Tick {
+        self.commission_tick
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

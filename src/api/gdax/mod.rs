@@ -6,6 +6,7 @@ pub mod errors;
 
 use openssl::pkey::{PKey, Private};
 use chashmap::CHashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use futures::prelude::*;
 use serde_derive::{Serialize, Deserialize};
@@ -21,6 +22,7 @@ use crate::api::{
     CancelAck,
     Balances
 };
+use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::timestamp::{Timestamped, IntoTimestamped};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -56,6 +58,8 @@ pub struct Client {
 
     // client order id => server order id
     order_ids: Arc<CHashMap<String, String>>,
+
+    symbols: HashMap<String, Symbol>,
 }
 
 impl Client {
@@ -80,6 +84,7 @@ impl Client {
             params,
             keys,
             order_ids: Arc::new(CHashMap::new()),
+            symbols: HashMap::new(),
         })
     }
 }
@@ -87,8 +92,12 @@ impl Client {
 impl ApiClient for Client {
     type Stream = futures::sync::mpsc::UnboundedReceiver<Notification>;
 
-    fn stream(&self) -> Self::Stream {
-        self.new_stream()
+    fn find_symbol(&self, symbol: &str) -> Option<Symbol> {
+        self.symbols.get(&symbol.to_lowercase()).cloned()
+    }
+
+    fn stream(&self, symbol: Symbol) -> Self::Stream {
+        self.new_stream(symbol)
     }
 
     fn order(&self, order: &Order)
