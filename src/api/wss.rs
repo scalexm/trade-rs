@@ -10,7 +10,7 @@ pub type NotifSender = UnboundedSender<Notification>;
 
 /// An object handling a WebSocket API connection.
 /// Inside handler functions, panicking can be used to terminate
-/// the connection easily (the connection always happen in a 
+/// the connection easily (the connection always happen in a
 /// separate, free thread).
 crate struct Handler<T> {
     out: ws::Sender,

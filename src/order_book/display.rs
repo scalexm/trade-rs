@@ -1,3 +1,5 @@
+//! Utilities for displaying order books.
+
 use std::fmt;
 use std::cell::Cell;
 use crate::{OrderBook, TickUnit};
@@ -14,17 +16,19 @@ pub fn set_limit(limit: usize) {
     DISPLAY_LIMIT.with(|dl| dl.set(limit));
 }
 
-/// Set the tread local tick size for displaying prices. If `None`, values are displayed in ticks.
+/// Set the tread local tick size for displaying prices. If `None`, values are
+/// displayed in tick units.
 pub fn set_price_tick(maybe_tick: Option<Tick>) {
     DISPLAY_PRICE_TICK.with(|dt| dt.set(maybe_tick));
 }
 
-/// Set the tread local tick size for displaying sizes. If `None`, values are displayed in ticks.
+/// Set the tread local tick size for displaying sizes. If `None`, values are
+/// displayed in tick units.
 pub fn set_size_tick(maybe_tick: Option<Tick>) {
     DISPLAY_SIZE_TICK.with(|dt| dt.set(maybe_tick));
 }
 
-/// Convert a ticked value in an unticked value with the current thread local price tick.
+/// Convert a ticked value to an unticked value with the current thread local price tick.
 pub fn displayable_price(ticked: TickUnit) -> String {
     match DISPLAY_PRICE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.unticked(ticked).unwrap(),
@@ -32,7 +36,7 @@ pub fn displayable_price(ticked: TickUnit) -> String {
     }
 }
 
-/// Convert a ticked value in an unticked value with the current thread local size tick.
+/// Convert a ticked value to an unticked value with the current thread local size tick.
 pub fn displayable_size(ticked: TickUnit) -> String {
     match DISPLAY_SIZE_TICK.with(|dt| dt.get()) {
         Some(tick) => tick.unticked(ticked).unwrap(),

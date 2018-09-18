@@ -1,3 +1,5 @@
+//! Error types specific to GDAX.
+
 use std::fmt;
 use hyper::StatusCode;
 use failure_derive::Fail;

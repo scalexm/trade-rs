@@ -29,7 +29,7 @@ use std::borrow::Cow;
 use failure_derive::Fail;
 use serde_derive::{Serialize, Deserialize};
 
-/// Base type for tick units;
+/// Base type for tick units.
 pub type TickUnit = u64;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -49,6 +49,7 @@ impl fmt::Display for Tick {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+/// A value either expressed in tick units or in a string representation.
 pub enum Tickable {
     Ticked(TickUnit),
     Unticked(String),
@@ -71,9 +72,9 @@ impl Tickable {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Fail)]
-#[fail(display = "Failed to convert {:?} with tick {}", value, tick)]
-/// An error which indicates that the conversion between an unticked value and a
-/// value in ticks has failed.
+#[fail(display = "failed to convert {:?} with tick {}", value, tick)]
+/// An error which indicates that the conversion between a string value and a
+/// value in tick units has failed.
 pub struct ConversionError {
     tick: Tick,
     value: Tickable,
@@ -121,9 +122,8 @@ impl Tick {
     /// unit is badly chosen.
     /// 
     /// # Panics
-    /// Panic in case of overflow.
-    /// Should correctly handle numbers up to `100,000,000,000.00000001` when using a 10^-8
-    /// precision, which seems ok. 
+    /// Panic in case of overflow. Should correctly handle numbers up to (at least)
+    /// `100,000,000,000.00000001` when using a 10^-8 precision, which seems ok.
     pub fn ticked(self, unticked: &str) -> Result<TickUnit, ConversionError> {
         let mut denom: u128 = 0;
 
@@ -179,7 +179,7 @@ impl Tick {
     pub fn unticked(self, ticked: TickUnit) -> Result<String, ConversionError> {
         let mut pad: usize = 0;
         let mut pow: u64 = 1;
-        while self.0 > pow {
+        while self.0 > pow { // find the smallest power of ten greater or equal to `self.0`
             pad += 1;
             pow = pow.checked_mul(10).unwrap();
         }

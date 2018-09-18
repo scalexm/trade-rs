@@ -29,6 +29,7 @@ pub struct LimitUpdate {
 }
 
 impl LimitUpdate {
+    /// Return a new `LimitUpdate`.
     pub fn new(price: TickUnit, size: TickUnit, side: Side) -> Self {
         LimitUpdate {
             price,
@@ -104,8 +105,7 @@ impl OrderBook {
     /// Iterator over the limits at bid, sorted by
     /// descending key.
     pub fn bid(&self) -> impl Iterator<Item = (&TickUnit, &TickUnit)> {
-        self.bid.iter()
-                .rev()
+        self.bid.iter().rev()
     }
 
     /// Iterator over the limits at ask, sorted by

@@ -57,7 +57,7 @@ pub struct Client {
     params: Params,
     keys: Option<Keys>,
 
-    // client order id => server order id
+    /// client order id => server order id
     order_ids: Arc<CHashMap<String, String>>,
 
     symbols: HashMap<String, Symbol>,

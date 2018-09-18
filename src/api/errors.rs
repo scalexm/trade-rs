@@ -1,7 +1,10 @@
+//! Define error types returned by `ApiClient` implementors.
+
 use failure::{Context, Backtrace};
 use failure_derive::Fail;
 use std::fmt;
 
+#[doc(hidden)]
 pub trait ErrorKind: private::Sealed + failure::Fail + Copy + Sized { }
 
 mod private {
@@ -33,6 +36,7 @@ impl<K: ErrorKind> fmt::Display for RestError<K> {
 }
 
 impl<K: ErrorKind> RestError<K> {
+    /// Return the kind of the underlying error.
     pub fn kind(&self) -> RestErrorKind<K> {
         *self.inner.get_context()
     }
@@ -66,6 +70,7 @@ pub enum OrderErrorKind {
     DuplicateOrder,
 
     #[fail(display = "order would take liquidity")]
+    /// The order would take liquidity but was marked as liquidity maker only.
     WouldTakeLiquidity,
 }
 
@@ -115,6 +120,7 @@ pub enum RestErrorKind<K: ErrorKind> {
 }
 
 #[derive(Debug)]
+/// An error inherent to the HTTP request.
 pub struct RequestError {
     inner: Box<failure::Fail>,
 }
@@ -144,6 +150,7 @@ impl fmt::Display for RequestError {
 }
 
 #[derive(Debug, Fail)]
+/// An error type returned by the implementors of `ApiClient`.
 pub enum ApiError<K: ErrorKind> {
     #[fail(display = "REST API error")]
     /// An error coming from the REST API.
@@ -154,8 +161,13 @@ pub enum ApiError<K: ErrorKind> {
     RequestError(#[cause] RequestError),
 }
 
+/// Error type adding error kinds specific to `ApiClient::order`.
 pub type OrderError = ApiError<OrderErrorKind>;
+
+/// Error type adding error kinds specific to `ApiClient::cancel`.
 pub type CancelError = ApiError<CancelErrorKind>;
+
+/// Basic error type not adding any specific error kinds.
 pub type Error = ApiError<!>;
 
 impl From<RestErrorKind<!>> for RestErrorKind<CancelErrorKind> {

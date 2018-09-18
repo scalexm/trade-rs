@@ -1,6 +1,9 @@
+//! Utilities for working with timestamps and timestamped objects.
+
 use std::ops::Deref;
 use serde_derive::{Serialize, Deserialize};
 
+/// Base type for timestamps.
 pub type Timestamp = u64;
 
 /// Return UTC timestamp in milliseconds.
@@ -41,7 +44,9 @@ impl<T> Deref for Timestamped<T> {
     }
 }
 
+/// Wrap `Self` in a `TimeStamped<Self>`.
 pub trait IntoTimestamped: Sized {
+    /// Add the current timestamp to `self`.
     fn timestamped(self) -> Timestamped<Self> {
         Timestamped {
             timestamp: timestamp_ms(),
@@ -49,6 +54,7 @@ pub trait IntoTimestamped: Sized {
         }
     }
 
+    /// Add the given `timestamp` to `self`.
     fn with_timestamp(self, timestamp: Timestamp) -> Timestamped<Self> {
         Timestamped {
             timestamp,

@@ -1,3 +1,5 @@
+//! Error types specific to binance.
+
 use std::fmt;
 use hyper::StatusCode;
 use failure_derive::Fail;

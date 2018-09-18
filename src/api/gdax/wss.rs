@@ -58,10 +58,10 @@ struct HandlerImpl {
     state: SubscriptionState,
     keys: Option<Keys>,
 
-    // server order id => client order
+    /// server order id => client order
     orders: HashMap<String, OrderConfirmation>,
 
-    // client order id => server order id (shared with `Client`)
+    /// client order id => server order id (shared with `Client`)
     order_ids: Arc<CHashMap<String, String>>,
 }
 
