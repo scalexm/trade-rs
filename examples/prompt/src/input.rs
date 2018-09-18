@@ -1,4 +1,4 @@
-use trade::{Tick, Side};
+use trade::Side;
 use trade::api::{ApiClient, Order, Cancel, TimeInForce, OrderType};
 use futures::sync::mpsc::UnboundedSender;
 use std::cell::{RefCell, Cell};
@@ -16,12 +16,7 @@ pub fn push(push: UnboundedSender<PushEvent>) {
     });
 }
 
-pub fn submit_input<C: ApiClient>(
-    siv: &mut Cursive,
-    content: &str,
-    price_tick: Tick,
-    size_tick: Tick
-) {
+pub fn submit_input<C: ApiClient>(siv: &mut Cursive, content: &str) {
     let args: Vec<_> = content.split(' ').collect();
 
     if args.is_empty() {
@@ -35,7 +30,7 @@ pub fn submit_input<C: ApiClient>(
         return;
     }
 
-    if let Err(err) = process_input::<C>(cmd, &args[1..], price_tick, size_tick) {
+    if let Err(err) = process_input::<C>(cmd, &args[1..]) {
         PUSH.with(|cell| {
             let msg = format!("{}", err);
             cell.borrow()
@@ -47,9 +42,7 @@ pub fn submit_input<C: ApiClient>(
     }
 }
 
-fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_tick: Tick)
-    -> Result<(), failure::Error>
-{
+fn process_input<C: ApiClient>(cmd: &str, args: &[&str]) -> Result<(), failure::Error> {
     match cmd {
         side @ "buy" | side @ "sell" => {
             if args.len() < 3 {
@@ -62,9 +55,6 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                 _ => unreachable!(),
             };
 
-            let size = size_tick.ticked(&args[0])?;
-            let price = price_tick.ticked(&args[1])?;
-
             let time_in_force = match args[2].to_lowercase().as_ref() {
                 "gtc" => TimeInForce::GoodTilCanceled,
                 "ioc" => TimeInForce::ImmediateOrCancel,
@@ -72,7 +62,7 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                 other => bail!("expected time in force, got `{}`", other),
             };
 
-            let mut order = Order::new(price, size, side)
+            let mut order = Order::new(args[1], args[0], side)
                 .with_order_type(OrderType::LimitMaker)
                 .with_time_in_force(time_in_force)
                 .with_time_window(TIME_WINDOW.with(|cell| cell.get()));
@@ -88,7 +78,8 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                     .unbounded_send(PushEvent::Order(order))
                     .unwrap();
             });
-        },
+        }
+
         "cancel" => {
             if args.len() < 1 {
                 bail!("wrong number of arguments");
@@ -104,7 +95,8 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
                     .unbounded_send(PushEvent::Cancel(cancel))
                     .unwrap();
             });
-        },
+        }
+
         "time_window" => {
             let tw = args[0].parse()?;
             if tw > 5000 {
@@ -112,7 +104,8 @@ fn process_input<C: ApiClient>(cmd: &str, args: &[&str], price_tick: Tick, size_
             }
 
             TIME_WINDOW.with(|cell| cell.set(tw));
-        },
+        }
+
         other => bail!("unknown command `{}`", other),
     }
 

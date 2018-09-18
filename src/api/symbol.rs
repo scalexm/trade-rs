@@ -82,8 +82,16 @@ impl<T> Deref for WithSymbol<T> {
 
 /// Wrap `Self` in a `WithSymbol<Self>`.
 pub trait IntoWithSymbol: Sized {
-    /// Add the given `symbol` to `self`.
+    /// Add the given `symbol` to an owned `self`.
     fn with_symbol(self, symbol: Symbol) -> WithSymbol<Self> {
+        WithSymbol {
+            symbol,
+            inner: self,
+        }
+    }
+
+    /// Add the given `symbol` to a borrowed `&self`.
+    fn add_symbol(&self, symbol: Symbol) -> WithSymbol<&Self> {
         WithSymbol {
             symbol,
             inner: self,

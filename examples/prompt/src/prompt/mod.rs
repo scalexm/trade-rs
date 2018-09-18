@@ -20,13 +20,17 @@ pub struct Prompt {
 }
 
 impl Prompt {
-    pub fn new<C: ApiClient + Send + 'static>(client: C)
+    pub fn new<C: ApiClient + Send + 'static>(client: C, symbol: &str)
         -> (Self, UnboundedSender<PushEvent>)
     {
         let (pull_snd, pull_rcv) = mpsc::channel();
         let (push_snd, push_rcv) = unbounded();
 
-        let stream = client.stream();
+        let symbol = client.find_symbol(symbol).expect("cannot find symbol");
+        order_book::display::set_price_tick(Some(symbol.price_tick()));
+        order_book::display::set_size_tick(Some(symbol.size_tick()));
+
+        let stream = client.stream(symbol);
         let order_book_thread = OrderBookThread {
             stream: Some(stream),
             pull: pull_snd.clone(),
@@ -38,6 +42,7 @@ impl Prompt {
             push: Some(push_rcv),
             pull: pull_snd.clone(),
             client,
+            symbol,
         };
         thread::spawn(move || push_thread.run());
 

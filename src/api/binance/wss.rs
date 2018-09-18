@@ -32,7 +32,7 @@ impl Client {
             let mut address = format!(
                "{0}/ws/{1}@trade/{1}@depth",
                 params.ws_address,
-                params.symbol.name.to_lowercase(),
+                symbol.name().to_lowercase(),
             );
             if let Some(listen_key) = listen_key {
                 address += &format!("/{}", listen_key);
@@ -163,6 +163,7 @@ impl<'a> BinanceBookSnapshot<'a> {
 /// A JSON representation of an order update, sent by binance.
 struct BinanceExecutionReport<'a> {
     c: &'a str,
+    C: &'a str,
     S: &'a str,
     q: &'a str,
     p: &'a str,
@@ -268,9 +269,15 @@ impl HandlerImpl {
                         }.with_timestamp(report.T))
                     ),
 
-                    "EXPIRED" | "CANCELED" => Some(
+                    "EXPIRED" => Some(
                         Notification::OrderExpiration(OrderExpiration {
-                            order_id: report.c.to_owned(),
+                            order_id: report.c.to_owned(), // subtle: lower case `c`
+                        }.with_timestamp(report.T))
+                    ),
+
+                    "CANCELED" => Some(
+                        Notification::OrderExpiration(OrderExpiration {
+                            order_id: report.C.to_owned(), // subtle: upper case `C`
                         }.with_timestamp(report.T))
                     ),
 

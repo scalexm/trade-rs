@@ -3,27 +3,24 @@
 pub mod binance;
 pub mod gdax;
 pub mod errors;
-pub mod params;
 pub mod timestamp;
 pub mod symbol;
 mod wss;
 
 use futures::prelude::*;
 use std::collections::HashMap;
+use std::borrow::Borrow;
 use serde_derive::{Serialize, Deserialize};
 use crate::{TickUnit, Side};
+use crate::tick::Tickable;
 use crate::order_book::LimitUpdate;
 
 use self::timestamp::Timestamped;
 use self::symbol::{Symbol, WithSymbol};
-pub use self::params::SymbolInfo;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Params needed for an API client.
 pub struct Params {
-    /// Symbol information.
-    pub symbol: SymbolInfo,
-
     /// WebSocket API address.
     pub ws_address: String,
 
@@ -59,8 +56,8 @@ pub enum OrderType {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An order to be sent through the API.
 pub struct Order {
-    price: TickUnit,
-    size: TickUnit,
+    price: Tickable,
+    size: Tickable,
     side: Side,
     #[serde(rename = "type")]
     type_: OrderType,
@@ -74,10 +71,12 @@ impl Order {
     /// * `price` being the order price
     /// * `size` being the order size
     /// * `side` being `Side::Bid` (buy) or `Side::Ask` (sell)
-    pub fn new(price: TickUnit, size: TickUnit, side: Side) -> Self {
+    pub fn new<T, U>(price: T, size: U, side: Side) -> Self
+        where T: Into<Tickable>, U: Into<Tickable>
+    {
         Order {
-            price,
-            size,
+            price: price.into(),
+            size: size.into(),
             side,
             type_: OrderType::Limit,
             time_in_force: TimeInForce::GoodTilCanceled,
@@ -120,13 +119,13 @@ impl Order {
     }
 
     /// Return the order price.
-    pub fn price(&self) -> TickUnit {
-        self.price
+    pub fn price(&self) -> &Tickable {
+        &self.price
     }
 
     /// Return the order size.
-    pub fn size(&self) -> TickUnit {
-        self.size
+    pub fn size(&self) -> &Tickable {
+        &self.size
     }
 
     /// Return the order type.
@@ -306,11 +305,11 @@ pub trait ApiClient: GenerateOrderId {
     fn stream(&self, symbol: Symbol) -> Self::Stream;
 
     /// Send an order to the exchange.
-    fn order(&self, order: &Order)
+    fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<OrderAck>, Error = errors::OrderError> + Send + 'static>;
 
     /// Send a cancel order to the exchange.
-    fn cancel(&self, cancel: &Cancel)
+    fn cancel<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<CancelAck>, Error = errors::CancelError> + Send + 'static>;
 
     /// Send a ping to the exchange.

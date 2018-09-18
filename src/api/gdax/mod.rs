@@ -7,6 +7,7 @@ pub mod errors;
 use openssl::pkey::{PKey, Private};
 use chashmap::CHashMap;
 use std::collections::HashMap;
+use std::borrow::Borrow;
 use std::sync::Arc;
 use futures::prelude::*;
 use serde_derive::{Serialize, Deserialize};
@@ -110,13 +111,13 @@ impl ApiClient for Client {
         self.new_stream(symbol)
     }
 
-    fn order(&self, order: &Order)
+    fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
         self.order_impl(order)
     }
 
-    fn cancel(&self, cancel: &Cancel)
+    fn cancel<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
         self.cancel_impl(cancel)

@@ -100,7 +100,7 @@ impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
                 .unwrap_or(false)
         {
             return api::errors::RestErrorKind::Specific(
-                api::errors::OrderErrorKind::DuplicateOrder
+                api::errors::OrderErrorKind::InsufficientBalance
             );
         }
 

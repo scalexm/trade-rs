@@ -2,7 +2,7 @@
 extern crate trade;
 
 use criterion::Criterion;
-use trade::Tick;
+use trade::tick::Tick;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let tick = Tick::new(1000);

@@ -3,6 +3,7 @@ use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
 use hyper::{Method, Request, Body};
 use futures::prelude::*;
 use std::collections::HashMap;
+use std::borrow::Borrow;
 use failure::Fail;
 use serde_derive::Deserialize;
 use log::error;
@@ -17,7 +18,7 @@ use crate::api::{
     Cancel,
     CancelAck,
 };
-use crate::api::symbol::Symbol;
+use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::binance::Client;
 use crate::api::binance::errors::{RestError, ErrorKinded};
 use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
@@ -94,6 +95,8 @@ enum BinanceFilter<'a> {
     PRICE_FILTER { tickSize: &'a str },
     LOT_SIZE { stepSize: &'a str },
     MIN_NOTIONAL,
+    ICEBERG_PARTS,
+    MAX_NUM_ALGO_ORDERS,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -116,11 +119,11 @@ enum Signature {
 }
 
 trait AsStr {
-    fn as_str(&self) -> &'static str;
+    fn as_str(self) -> &'static str;
 }
 
 impl AsStr for Side {
-    fn as_str(&self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Side::Ask => "SELL",
             Side::Bid => "BUY",
@@ -129,7 +132,7 @@ impl AsStr for Side {
 }
 
 impl AsStr for OrderType {
-    fn as_str(&self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             OrderType::Limit => "LIMIT",
             OrderType::LimitMaker => "LIMIT_MAKER",
@@ -138,7 +141,7 @@ impl AsStr for OrderType {
 }
 
 impl AsStr for TimeInForce {
-    fn as_str(&self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             TimeInForce::GoodTilCanceled => "GTC",
             TimeInForce::FillOrKilll => "FOK",
@@ -226,25 +229,26 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn order_impl(&self, order: &Order)
+    crate fn order_impl<T: Borrow<Order>>(&self, order: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
+        let symbol = order.symbol();
+        let order = (*order).borrow();
+
         let mut query = QueryString::new();
-        query.push("symbol", self.params.symbol.name.to_uppercase());
+        query.push("symbol", symbol.name());
         query.push("side", order.side.as_str());
         query.push("type", order.type_.as_str());
-        query.push("timeInForce", order.time_in_force.as_str());
+        if order.type_ == OrderType::Limit {
+            query.push("timeInForce", order.time_in_force.as_str());
+        }
         query.push(
             "quantity",
-            self.params.symbol.size_tick
-                .unticked(order.size)
-                .expect("bad size tick")
+            order.size.unticked(symbol.size_tick()).borrow() as &str
         );
         query.push(
             "price",
-            self.params.symbol.price_tick
-                .unticked(order.price)
-                .expect("bad price tick")
+            order.price.unticked(symbol.price_tick()).borrow() as &str
         );
         if let Some(order_id) = &order.order_id {
             query.push("newClientOrderId", order_id);
@@ -265,11 +269,14 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn cancel_impl(&self, cancel: &Cancel)
+    crate fn cancel_impl<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
+        let symbol = cancel.symbol();
+        let cancel = (*cancel).borrow();
+
         let mut query = QueryString::new();
-        query.push("symbol", self.params.symbol.name.to_uppercase());
+        query.push("symbol", symbol.name());
         query.push("origClientOrderId", &cancel.order_id);
         query.push("recvWindow", cancel.time_window);
         query.push("timestamp", timestamp_ms());

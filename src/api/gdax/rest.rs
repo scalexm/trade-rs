@@ -1,5 +1,6 @@
 use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request};
+use std::borrow::Borrow;
 use futures::prelude::*;
 use failure::Fail;
 use log::{warn, debug, error};
@@ -18,7 +19,7 @@ use crate::api::{
     Balance,
     Balances
 };
-use crate::api::symbol::Symbol;
+use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
 use crate::api::gdax::{convert_str_timestamp, Client};
 use crate::api::gdax::errors::{RestError, ErrorKinded};
@@ -64,11 +65,11 @@ struct GdaxCurrency<'a> {
 }
 
 trait AsStr {
-    fn as_str(&self) -> &'static str;
+    fn as_str(self) -> &'static str;
 }
 
 impl AsStr for Side {
-    fn as_str(&self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Side::Ask => "sell",
             Side::Bid => "buy",
@@ -77,7 +78,7 @@ impl AsStr for Side {
 }
 
 impl AsStr for TimeInForce {
-    fn as_str(&self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             TimeInForce::GoodTilCanceled => "GTC",
             TimeInForce::FillOrKilll => "FOK",
@@ -166,7 +167,7 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn order_impl(&self, order: &Order)
+    crate fn order_impl<T: Borrow<Order>>(&self, order: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
         // Note that GDAX only accepts custom client ids in the form of UUIDs, so there can
@@ -174,16 +175,20 @@ impl Client {
         // neat because checking for duplicate orders in a synchronized manner would have been
         // difficult otherwise.
 
+        let symbol = order.symbol();
+        let order = (*order).borrow();
+
         let client_oid = order.order_id.clone();
         let time_in_force = order.time_in_force;
 
+        let size = order.size.unticked(symbol.size_tick());
+        let price = order.price.unticked(symbol.price_tick());
+
         let order = GdaxOrder {
-            size: &self.params.symbol.size_tick.unticked(order.size)
-                .expect("bad size tick"),
-            price: &self.params.symbol.price_tick.unticked(order.price)
-                .expect("bad price tick"),
-            side: &order.side.as_str(),
-            product_id: &self.params.symbol.name,
+            size: size.borrow(),
+            price: price.borrow(),
+            side: order.side.as_str(),
+            product_id: symbol.name(),
             client_oid: client_oid.as_ref().map(|oid| oid.as_ref()),
             time_in_force: time_in_force.as_str(),
             post_only: order.type_ == OrderType::LimitMaker,
@@ -228,9 +233,11 @@ impl Client {
         Box::new(fut)
     }
 
-    crate fn cancel_impl(&self, cancel: &Cancel)
+    crate fn cancel_impl<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
+        let cancel = (*cancel).borrow();
+
         let order_id = match self.order_ids.get(&cancel.order_id) {
             Some(order_id) => order_id,
             None => {

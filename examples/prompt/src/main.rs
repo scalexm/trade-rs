@@ -6,7 +6,6 @@ mod prompt;
 mod input;
 
 use std::fs::File;
-use trade::{order_book, Tick};
 use trade::api::{self, ApiClient, binance, gdax};
 use clap::clap_app;
 
@@ -28,14 +27,14 @@ fn build_siv() -> Cursive {
     siv
 }
 
-fn draw_input_line<C: ApiClient>(siv: &mut Cursive, price_tick: Tick, size_tick: Tick) {
+fn draw_input_line<C: ApiClient>(siv: &mut Cursive) {
     siv.add_layer(
         EditView::new()
             .filler(" ")
             .on_submit(move |siv, content| {
-                input::submit_input::<C>(siv, content, price_tick, size_tick);
+                input::submit_input::<C>(siv, content);
                 siv.pop_layer();
-                draw_input_line::<C>(siv, price_tick, size_tick);
+                draw_input_line::<C>(siv);
             }).full_width()
     );
     siv.reposition_layer(
@@ -44,15 +43,15 @@ fn draw_input_line<C: ApiClient>(siv: &mut Cursive, price_tick: Tick, size_tick:
     );
 }
 
-fn run<C: ApiClient + Send + 'static>(client: C, price_tick: Tick, size_tick: Tick) {
+fn run<C: ApiClient + Send + 'static>(client: C, symbol: &str) {
     let mut siv = build_siv();
 
-    let (prompt, push) = prompt::Prompt::new(client);
+    let (prompt, push) = prompt::Prompt::new(client, symbol);
     input::push(push);
 
     siv.add_layer(prompt.full_screen());
 
-    draw_input_line::<C>(&mut siv, price_tick, size_tick);
+    draw_input_line::<C>(&mut siv);
     siv.run();
 }
 
@@ -64,6 +63,7 @@ fn main() {
         (author: "scalexm <martin.alex32@hotmail.fr>")
         (about: "Small CLI app for testing `trade-rs` API")
         (@arg exchange: +required "Exchange name (`gdax` or `binance`)")
+        (@arg symbol: +required "Symbol name")
         (@arg params: -p --params +takes_value "Params file (default = `params.json`)")
         (@arg keys: -k --keys +takes_value "Keys file (default = `keys.json`)")
     ).get_matches();
@@ -76,12 +76,8 @@ fn main() {
 
     let params: api::Params = serde_json::from_reader(params)
         .expect("expected valid JSON for `api::Params`");
-    
-    let price_tick = params.symbol.price_tick;
-    let size_tick = params.symbol.size_tick;
-    order_book::display::set_price_tick(Some(price_tick));
-    order_book::display::set_size_tick(Some(size_tick));
 
+    let symbol = matches.value_of("symbol").unwrap();
     match matches.value_of("exchange").unwrap() {
         "binance" => {
             let keys = serde_json::from_reader(keys)
@@ -90,8 +86,8 @@ fn main() {
             let client = binance::Client::new(
                 params,
                 Some(keys)
-            ).expect("unable to retrieve listen key");
-            run(client, price_tick, size_tick);
+            ).expect("unable to create client");
+            run(client, symbol);
         },
 
         "gdax" => {
@@ -101,8 +97,8 @@ fn main() {
             let client = gdax::Client::new(
                 params,
                 Some(keys)
-            ).expect("unable to retrieve listen key");
-            run(client, price_tick, size_tick);
+            ).expect("unable to create client");
+            run(client, symbol);
         }
 
         other => {

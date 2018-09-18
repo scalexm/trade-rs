@@ -49,13 +49,39 @@ impl fmt::Display for Tick {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// A value either expressed in tick units or in a string representation.
+/// A value either expressed in tick units or with its unticked string representation.
 pub enum Tickable {
+    /// Value is expressed in tick units.
     Ticked(TickUnit),
+
+    /// Value is expressed with a string with its unticked string representation.
     Unticked(String),
 }
 
+impl From<TickUnit> for Tickable {
+    fn from(ticks: TickUnit) -> Tickable {
+        Tickable::Ticked(ticks)
+    }
+}
+
+impl From<String> for Tickable {
+    fn from(unticked: String) -> Tickable {
+        Tickable::Unticked(unticked)
+    }
+}
+
+impl From<&str> for Tickable {
+    fn from(unticked: &str) -> Tickable {
+        Tickable::Unticked(unticked.to_owned())
+    }
+}
+
 impl Tickable {
+    /// Convert the underlying value into tick units. Identity if
+    /// `self == Tickable::Ticked(..)`.
+    /// 
+    /// # Panics
+    /// Panic if the conversion fails.
     pub fn ticked(&self, tick: Tick) -> TickUnit {
         match self {
             Tickable::Ticked(value) => *value,
@@ -63,6 +89,11 @@ impl Tickable {
         }
     }
 
+    /// Convert the underlying value into an unticked string representation. Identity
+    /// if `self == Tickable::Unticked(..)`.
+    /// 
+    /// # Panics
+    /// Panic if the conversion fails.
     pub fn unticked(&'_ self, tick: Tick) -> Cow<'_, str> {
         match self {
             Tickable::Ticked(value) => Cow::Owned(tick.unticked(*value).unwrap()),
@@ -222,7 +253,7 @@ impl Tick {
     }
 
     crate fn tick_size(unticked: &str) -> Option<Tick> {
-        if unticked.starts_with("1") || unticked.starts_with("1.") {
+        if unticked.starts_with('1') || unticked.starts_with("1.") {
             return Some(Tick::new(1));
         }
 
