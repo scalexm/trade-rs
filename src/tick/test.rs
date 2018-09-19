@@ -15,6 +15,11 @@ fn convert_unticked() {
     );
 
     assert_eq!(
+        Ok(5),
+        Tick::new(4).ticked("1.25")
+    );
+
+    assert_eq!(
         Ok(4),
         Tick::new(2000).ticked("0.002")
     );
@@ -107,9 +112,15 @@ fn overflow_ticked() {
 }
 
 #[test]
-fn bad_divisor() {
-    assert!(
-        Tick::new(10).ticked("5.11").is_err()
+fn truncate() {
+    assert_eq!(
+        Ok(51),
+        Tick::new(10).ticked("5.11")
+    );
+
+    assert_eq!(
+        Ok(3),
+        Tick::new(4).ticked("0.76")
     );
 }
 

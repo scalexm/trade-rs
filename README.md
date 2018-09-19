@@ -9,7 +9,7 @@ Uses [tokio](https://github.com/tokio-rs/tokio), [hyper](https://github.com/hype
 and [ws-rs](https://github.com/housleyjk/ws-rs) for asynchronous requests and
 streaming.
 
-Some sample code can be found in the `api-prompt` CLI app.
+Some sample code can be found in the `examples` folder.
 
 Exchanges currently implemented:
 * binance

@@ -54,7 +54,7 @@ pub enum Tickable {
     /// Value is expressed in tick units.
     Ticked(TickUnit),
 
-    /// Value is expressed with a string with its unticked string representation.
+    /// Value is expressed with its unticked string representation.
     Unticked(String),
 }
 
@@ -81,7 +81,7 @@ impl Tickable {
     /// `self == Tickable::Ticked(..)`.
     /// 
     /// # Panics
-    /// Panic if the conversion fails.
+    /// Panic if the conversion fails (overflow).
     pub fn ticked(&self, tick: Tick) -> TickUnit {
         match self {
             Tickable::Ticked(value) => *value,
@@ -93,7 +93,7 @@ impl Tickable {
     /// if `self == Tickable::Unticked(..)`.
     /// 
     /// # Panics
-    /// Panic if the conversion fails.
+    /// Panic if the conversion fails (bad string repr or overflow).
     pub fn unticked(&'_ self, tick: Tick) -> Cow<'_, str> {
         match self {
             Tickable::Ticked(value) => Cow::Owned(tick.unticked(*value).unwrap()),
@@ -147,6 +147,7 @@ impl Tick {
 
     /// Convert an unticked value, e.g. "0.001" into a value expressed in ticks,
     /// e.g. if `self.ticks_per_unit == 1000" then this would return `Ok(1)`.
+    /// Will truncate extra decimals if `self.ticks_per_unit()` is too low.
     /// 
     /// # Errors
     /// Return `Err` if the value is in an incorrect format or if the number of ticks per
@@ -192,10 +193,6 @@ impl Tick {
             .checked_mul(denom).unwrap()
             .checked_add(u128::from(fract)).unwrap()
             .checked_mul(u128::from(self.0)).unwrap();
-
-        if num % denom != 0 {
-            return Err(ConversionError::unticked(unticked.to_owned(), self));
-        }
 
         Ok((num / denom).try_into().unwrap())
     }

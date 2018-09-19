@@ -19,13 +19,8 @@ pub struct Symbol {
 
 impl Symbol {
     crate fn new(name: &str, price_tick: Tick, size_tick: Tick) -> Option<Self> {
-        let name = match SymbolName::from(name) {
-            Ok(name) => name,
-            Err(..) => return None,
-        };
-
         Some(Symbol {
-            name,
+            name: SymbolName::from(name).ok()?,
             price_tick,
             size_tick,
             commission_tick: Tick::new(1),

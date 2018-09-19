@@ -35,10 +35,12 @@ impl QueryString {
     }
 
     fn push<P: fmt::Display>(&mut self, name: &str, arg: P) {
+        use std::fmt::Write;
+
         if self.query.is_empty() {
-            self.query = format!("{}={}", name, arg);
+            write!(&mut self.query, "{}={}", name, arg).unwrap();
         } else {
-            self.query = format!("{}&{}={}", self.query, name, arg);
+            write!(&mut self.query, "&{}={}", name, arg).unwrap();
         }
     }
 
