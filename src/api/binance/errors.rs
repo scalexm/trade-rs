@@ -1,4 +1,4 @@
-//! Error types specific to binance.
+//! A module defining error types specific to binance.
 
 use std::fmt;
 use hyper::StatusCode;

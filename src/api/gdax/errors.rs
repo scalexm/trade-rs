@@ -1,4 +1,4 @@
-//! Error types specific to GDAX.
+//! A module defining error types specific to GDAX.
 
 use std::fmt;
 use hyper::StatusCode;

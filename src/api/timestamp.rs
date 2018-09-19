@@ -1,4 +1,4 @@
-//! Utilities for working with timestamps and timestamped objects.
+//! A module defining helpers for working with timestamps and timestamped objects.
 
 use std::ops::Deref;
 use serde_derive::{Serialize, Deserialize};

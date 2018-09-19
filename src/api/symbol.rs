@@ -1,4 +1,4 @@
-//! Define the `Symbol` type.
+//! A module defining the `Symbol` type.
 
 use std::ops::Deref;
 use arrayvec::ArrayString;
@@ -9,7 +9,7 @@ use crate::tick::Tick;
 pub type SymbolName = ArrayString<[u8; 10]>;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// A type carrying information about the traded symbol.
+/// A type carrying information about a traded symbol.
 pub struct Symbol {
     name: SymbolName,
     price_tick: Tick,

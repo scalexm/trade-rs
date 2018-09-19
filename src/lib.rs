@@ -13,10 +13,18 @@ pub mod api;
 pub mod order_book;
 pub mod tick;
 
-use serde_derive::{Serialize, Deserialize};
+pub mod prelude {
+    //! A prelude for crates using this library. Re-exports the most used types
+    //! and traits.
 
-pub use self::tick::TickUnit;
-pub use self::order_book::OrderBook;
+    pub use crate::tick::TickUnit;
+    pub use crate::api::ApiClient;
+    pub use crate::api::symbol::{Symbol, WithSymbol};
+    pub use crate::api::order_book::{LiveOrderBook, BookState};
+    pub use crate::Side;
+}
+
+use serde_derive::{Serialize, Deserialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Side of an order (bid or ask).

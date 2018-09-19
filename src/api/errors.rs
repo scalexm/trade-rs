@@ -1,4 +1,4 @@
-//! Define error types returned by `ApiClient` implementors.
+//! A module defining error types returned by `ApiClient` implementors.
 
 use failure::{Context, Backtrace};
 use failure_derive::Fail;

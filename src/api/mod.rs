@@ -5,14 +5,15 @@ pub mod gdax;
 pub mod errors;
 pub mod timestamp;
 pub mod symbol;
+pub mod order_book;
 mod wss;
 
 use futures::prelude::*;
 use std::collections::HashMap;
 use std::borrow::Borrow;
 use serde_derive::{Serialize, Deserialize};
-use crate::{TickUnit, Side};
-use crate::tick::Tickable;
+use crate::Side;
+use crate::tick::{TickUnit, Tickable};
 use crate::order_book::LimitUpdate;
 
 use self::timestamp::Timestamped;

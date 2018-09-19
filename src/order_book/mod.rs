@@ -5,7 +5,8 @@ mod test;
 
 use std::collections::btree_map::BTreeMap;
 use serde_derive::{Serialize, Deserialize};
-use crate::{TickUnit, Side};
+use crate::Side;
+use crate::tick::TickUnit;
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 /// An order book. Internally uses two `BTreeMap`, one
