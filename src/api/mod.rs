@@ -2,6 +2,7 @@
 
 pub mod binance;
 pub mod gdax;
+pub mod hitbtc;
 pub mod errors;
 pub mod timestamp;
 pub mod symbol;
