@@ -1,4 +1,4 @@
-use trade::*;
+use trade::order_book::OrderBook;
 use trade::api::{self, *};
 use tokio::runtime::current_thread;
 use trade::api::symbol::{Symbol, IntoWithSymbol};
