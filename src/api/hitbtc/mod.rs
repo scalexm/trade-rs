@@ -1,8 +1,8 @@
 //! Implementation of `ApiClient` for the HitBTC API.
 
-mod rest;
-mod ws;
 pub mod errors;
+mod rest;
+mod wss;
 
 use serde_derive::{Serialize, Deserialize};
 use std::collections::HashMap;
@@ -25,17 +25,17 @@ use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::timestamp::{Timestamped, IntoTimestamped};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// An HitBTC key pair: api key + secret key.
+/// An HitBTC key pair: public key + secret key.
 pub struct KeyPair {
-    api_key: String,
+    public_key: String,
     secret_key: String,
 }
 
 impl KeyPair {
     /// Return a new key pair.
-    pub fn new(api_key: String, secret_key: String) -> Self {
+    pub fn new(public_key: String, secret_key: String) -> Self {
         KeyPair {
-            api_key,
+            public_key,
             secret_key,
         }
     }
@@ -73,7 +73,7 @@ impl ApiClient for Client {
     }
 
     fn stream(&self, symbol: Symbol) -> Self::Stream {
-        panic!()
+        self.new_stream(symbol)
     }
 
     fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)

@@ -40,7 +40,7 @@ impl Client {
             debug!("initiating WebSocket connection at {}", address);
 
             if let Err(err) = ws::connect(address.as_ref(), |out| {
-                wss::Handler::new(out, snd.clone(), true, HandlerImpl{
+                wss::Handler::new(out, snd.clone(), wss::KeepAlive::True, HandlerImpl{
                     params: params.clone(),
                     symbol,
                     book_snapshot_state: BookSnapshotState::None,
@@ -217,8 +217,7 @@ impl HandlerImpl {
                 // The order is consistent if the previous `u + 1` is equal to current `U`.
                 if let Some(previous_u) = self.previous_u {
                     if previous_u + 1 != depth_update.U {
-                        // FIXME: Maybe we should just shutdown here?
-                        bail!("previous `u + 1` and current `U` do not match");
+                        panic!("previous `u + 1` and current `U` do not match");
                     }
                 }
                 self.previous_u = Some(depth_update.u);

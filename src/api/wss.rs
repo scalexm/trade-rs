@@ -8,6 +8,12 @@ use crate::api::Notification;
 
 pub type NotifSender = UnboundedSender<Notification>;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+crate enum KeepAlive {
+    True,
+    False,
+}
+
 /// An object handling a WebSocket API connection.
 /// Inside handler functions, panicking can be used to terminate
 /// the connection easily (the connection always happen in a
@@ -15,7 +21,7 @@ pub type NotifSender = UnboundedSender<Notification>;
 crate struct Handler<T> {
     out: ws::Sender,
     snd: NotifSender,
-    keep_alive: bool,
+    keep_alive: KeepAlive,
 
     /// We keep a reference to the `EXPIRE` timeout so that we can cancel it when we receive
     /// something from the server.
@@ -39,7 +45,7 @@ impl<T> Handler<T> {
     crate fn new(
         out: ws::Sender,
         snd: UnboundedSender<Notification>,
-        keep_alive: bool,
+        keep_alive: KeepAlive,
         inner: T
     ) -> Self
     {
@@ -57,7 +63,7 @@ impl<T: HandlerImpl> ws::Handler for Handler<T> {
     fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
         self.inner.on_open(&self.out)?;
 
-        if self.keep_alive {
+        if self.keep_alive == KeepAlive::True {
             self.out.timeout(PING_TIMEOUT, PING)?;
         }
         self.out.timeout(EXPIRE_TIMEOUT, EXPIRE)

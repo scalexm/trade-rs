@@ -1,8 +1,8 @@
 //! Implementation of `ApiClient` for the binance API.
 
+pub mod errors;
 mod wss;
 mod rest;
-pub mod errors;
 
 use openssl::pkey::{PKey, Private};
 use std::collections::HashMap;

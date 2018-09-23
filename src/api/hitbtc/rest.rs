@@ -100,7 +100,7 @@ impl Client {
         let mut request = Request::builder();
 
         if let Some(keys) = self.keys.as_ref() {
-            let pwd = format!("{}:{}", keys.api_key, keys.secret_key);
+            let pwd = format!("{}:{}", keys.public_key, keys.secret_key);
             let pwd = base64::encode(pwd.as_bytes());
             request.header("Authorization", format!("Basic {}", pwd).as_bytes());
         }

@@ -30,7 +30,7 @@ impl Client {
             debug!("initiating WebSocket connection at {}", ws_address);
             
             if let Err(err) = ws::connect(ws_address.as_ref(), |out| {
-                wss::Handler::new(out, snd.clone(), false, HandlerImpl {
+                wss::Handler::new(out, snd.clone(), wss::KeepAlive::False, HandlerImpl {
                     symbol,
                     state: SubscriptionState::NotSubscribed,
                     keys: keys.clone(),
@@ -180,7 +180,6 @@ impl HandlerImpl {
 
         match event_type.type_ {
             "subscribe" => {
-                // FIXME: panic if we get an error when trying to subscribe
                 if self.state != SubscriptionState::NotSubscribed {
                     error!("received `subscribe` event while already subscribed");
                 }
