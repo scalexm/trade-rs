@@ -318,7 +318,7 @@ impl HandlerImpl {
             "error" => {
                 let error: GdaxError<'_> = serde_json::from_str(json)?;
                 bail!("{}: {:?}", error.message, error.reason);
-            },
+            }
 
             _ => (),
         };

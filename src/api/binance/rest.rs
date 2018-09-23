@@ -125,7 +125,7 @@ impl Client {
             + 'static
         > where RestError: ErrorKinded<K>
     {
-        use hyper::{Request, Body};
+        use hyper::Request;
 
         let mut request = Request::builder();
 
@@ -141,16 +141,17 @@ impl Client {
         };
 
         let address = format!(
-            "{}/{}{}{}",
+            "{}/{}",
             self.params.http_address,
             endpoint,
-            if query.is_empty() { "" } else { "?" },
-            query
         );
 
-        request.method(method).uri(&address);
+        request.method(method)
+            .header("User-Agent", &b"hyper"[..])
+            .header("Content-Type", &b"application/x-www-form-urlencoded"[..])
+            .uri(&address);
 
-        let request = match request.body(Body::empty()) {
+        let request = match request.body(query.into()) {
             Ok(request) => request,
             Err(err) => return Box::new(
                 Err(err)

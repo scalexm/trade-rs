@@ -83,6 +83,12 @@ struct HitBtcBalance<'a> {
     reserved: &'a str,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+struct HitBtcError<'a> {
+    #[serde(borrow)]
+    error: crate::api::hitbtc::errors::HitBtcRestError<'a>,
+}
+
 impl Client {
     fn request<K: api::errors::ErrorKind>(
         &self,
@@ -95,7 +101,7 @@ impl Client {
             + 'static
         > where RestError: ErrorKinded<K>
     {
-        use hyper::{Request, Body};
+        use hyper::Request;
 
         let mut request = Request::builder();
 
@@ -108,16 +114,17 @@ impl Client {
         let query = query.into_string();
 
         let address = format!(
-            "{}/{}{}{}",
+            "{}/{}",
             self.params.http_address,
             endpoint,
-            if query.is_empty() { "" } else { "?" },
-            query
         );
 
-        request.method(method).uri(&address);
+        request.method(method)
+            .header("User-Agent", &b"hyper"[..])
+            .header("Content-Type", &b"application/x-www-form-urlencoded"[..])
+            .uri(&address);
 
-        let request = match request.body(Body::empty()) {
+        let request = match request.body(query.into()) {
             Ok(request) => request,
             Err(err) => return Box::new(
                 Err(err)
@@ -148,8 +155,8 @@ impl Client {
         .map_err(api::errors::ApiError::RequestError)
         .and_then(|(status, body)| {
             if status != hyper::StatusCode::OK {
-                let hit_btc_error = serde_json::from_slice(&body);
-                let error = RestError::from_hit_btc_error(status, hit_btc_error.ok());
+                let hit_btc_error: Option<HitBtcError<'_>> = serde_json::from_slice(&body).ok();
+                let error = RestError::from_hit_btc_error(status, hit_btc_error.map(|e| e.error));
                 let kind = error.kind();
                 Err(
                     api::errors::ApiError::RestError(error.context(kind).into())

@@ -1,0 +1,4 @@
+{
+    "ws_address": "wss://api.hitbtc.com/api/2/ws",
+    "http_address": "https://api.hitbtc.com"
+}

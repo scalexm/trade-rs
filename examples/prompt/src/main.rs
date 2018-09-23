@@ -6,7 +6,7 @@ mod prompt;
 mod input;
 
 use std::fs::File;
-use trade::api::{self, ApiClient, binance, gdax};
+use trade::api::{self, ApiClient, binance, gdax, hitbtc};
 use clap::clap_app;
 
 use cursive::Cursive;
@@ -95,6 +95,17 @@ fn main() {
                 .expect("expected valid JSON for `gdax::KeyPair`");
 
             let client = gdax::Client::new(
+                params,
+                Some(keys)
+            ).expect("unable to create client");
+            run(client, symbol);
+        }
+
+        "hitbtc" => {
+            let keys = serde_json::from_reader(keys)
+                .expect("expected valid JSON for `hitbtc::KeyPair`");
+
+            let client = hitbtc::Client::new(
                 params,
                 Some(keys)
             ).expect("unable to create client");

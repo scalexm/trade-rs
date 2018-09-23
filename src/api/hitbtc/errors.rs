@@ -4,12 +4,13 @@ use failure_derive::Fail;
 use serde_derive::Deserialize;
 use hyper::StatusCode;
 use std::fmt;
+use std::borrow::Cow;
 use crate::api;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 pub(super) struct HitBtcRestError<'a> {
     code: i32,
-    message: &'a str,
+    message: Cow<'a, str>,
     description: Option<&'a str>,
 }
 
@@ -68,6 +69,12 @@ impl api::errors::ErrorKinded<api::errors::OrderErrorKind> for RestError {
             );
         }
 
+        if self.kind == RestErrorKind::BadRequest && self.error_code == 20008 {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::OrderErrorKind::DuplicateOrder
+            );
+        }
+
         <Self as api::errors::ErrorKinded<!>>::kind(self).into()
     }
 }
@@ -90,7 +97,7 @@ impl RestError {
         RestError {
             kind: RestErrorKind::from_status_code(status),
             error_code: hit_btc_error.as_ref().map(|error| error.code).unwrap_or(-1),
-            error_msg: hit_btc_error.as_ref().map(|error| error.message.to_owned())
+            error_msg: hit_btc_error.as_ref().map(|error| error.message.to_string())
                 .unwrap_or_else(|| "<empty>".to_owned()),
             description: hit_btc_error.and_then(
                 |error| error.description.map(|desc| desc.to_owned())

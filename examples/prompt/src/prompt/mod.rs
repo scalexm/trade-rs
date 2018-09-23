@@ -63,9 +63,9 @@ impl Prompt {
                     let cause = err.cause().unwrap();
                     match cause.cause() {
                         Some(inner_cause) => {
-                            self.output = format!("{} ({})", cause, inner_cause)
+                            self.output = format!("[{}] {}", cause, inner_cause)
                         },
-                        None => self.output = format!("{}", cause),
+                        None => self.output = format!("[{}]", cause),
                     }
                 }
             },
@@ -74,9 +74,9 @@ impl Prompt {
                     let cause = err.cause().unwrap();
                     match cause.cause() {
                         Some(inner_cause) => {
-                            self.output = format!("{} ({})", cause, inner_cause)
+                            self.output = format!("[{}] {}", cause, inner_cause)
                         },
-                        None => self.output = format!("{}", cause),
+                        None => self.output = format!("[{}]", cause),
                     }
                 }
             },

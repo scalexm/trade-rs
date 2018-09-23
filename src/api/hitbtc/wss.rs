@@ -113,13 +113,13 @@ struct HitBtcLimitUpdates<'a> {
     ask: Vec<HitBtcLimitUpdate<'a>>,
     #[serde(borrow)]
     bid: Vec<HitBtcLimitUpdate<'a>>,
+    sequence: SequenceNumber,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 struct HitBtcBookUpdate<'a> {
     #[serde(borrow)]
     params: HitBtcLimitUpdates<'a>,
-    sequence: SequenceNumber,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -166,7 +166,8 @@ struct HitBtcReport<'a> {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 struct MethodType<'a> {
-    method: &'a str,
+    #[serde(borrow)]
+    method: Option<&'a str>,
 }
 
 impl HandlerImpl {
@@ -194,16 +195,21 @@ impl HandlerImpl {
     fn parse_message(&mut self, json: &str, out: &wss::NotifSender) -> Result<(), failure::Error> {
         let method_type: MethodType<'_> = serde_json::from_str(json)?;
 
-        match method_type.method {
+        let method = match method_type.method {
+            Some(method) => method,
+            None => return Ok(()),
+        };
+
+        match method {
             "snapshotOrderbook" | "updateOrderbook" => {
                 let snapshot: HitBtcBookUpdate<'_> = serde_json::from_str(json)?;
 
-                if !self.last_sequence.map(|s| s + 1 == snapshot.sequence).unwrap_or(true) {
+                if !self.last_sequence.map(|s| s + 1 == snapshot.params.sequence).unwrap_or(true) {
                     panic!("desynchronized order book");
                 }
 
                 self.state.order_book = true;
-                self.last_sequence = Some(snapshot.sequence);
+                self.last_sequence = Some(snapshot.params.sequence);
 
                 let bid = snapshot.params.bid
                     .into_iter()
