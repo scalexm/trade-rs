@@ -25,11 +25,7 @@ pub struct RestError {
     pub error_msg: Option<String>,
 }
 
-pub(super) trait ErrorKinded<K: api::errors::ErrorKind> {
-    fn kind(&self) -> api::errors::RestErrorKind<K>;
-}
-
-impl ErrorKinded<!> for RestError {
+impl api::errors::ErrorKinded<!> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<!> {
         if self.kind == RestErrorKind::BrokeRateLimit ||
             self.kind == RestErrorKind::AddressBanned ||
@@ -60,7 +56,7 @@ impl ErrorKinded<!> for RestError {
     }
 }
 
-impl ErrorKinded<api::errors::CancelErrorKind> for RestError {
+impl api::errors::ErrorKinded<api::errors::CancelErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::CancelErrorKind> {
         let unknown_order =
             (self.error_code == Some(-1010) || self.error_code == Some(-2011)) &&
@@ -72,11 +68,11 @@ impl ErrorKinded<api::errors::CancelErrorKind> for RestError {
             );
         }
 
-        <Self as ErrorKinded<!>>::kind(self).into()
+        <Self as api::errors::ErrorKinded<!>>::kind(self).into()
     }
 }
 
-impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
+impl api::errors::ErrorKinded<api::errors::OrderErrorKind> for RestError {
     fn kind(&self) -> api::errors::RestErrorKind<api::errors::OrderErrorKind> {
         let order_rejected =
             self.error_code == Some(-1010) ||
@@ -115,7 +111,7 @@ impl ErrorKinded<api::errors::OrderErrorKind> for RestError {
             );
         }
 
-        <Self as ErrorKinded<!>>::kind(self).into()
+        <Self as api::errors::ErrorKinded<!>>::kind(self).into()
     }
 }
 

@@ -19,10 +19,11 @@ use crate::api::{
     Balance,
     Balances
 };
+use crate::api::errors::ErrorKinded;
 use crate::api::symbol::{Symbol, WithSymbol};
-use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
-use crate::api::gdax::{convert_str_timestamp, Client};
-use crate::api::gdax::errors::{RestError, ErrorKinded};
+use crate::api::timestamp::{convert_str_timestamp, timestamp_ms, Timestamped, IntoTimestamped};
+use crate::api::gdax::Client;
+use crate::api::gdax::errors::RestError;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
 struct GdaxOrder<'a> {
@@ -199,7 +200,7 @@ impl Client {
         let order_ids = self.order_ids.clone();
 
         let fut = self.request("orders", Method::POST, body).and_then(move |body| {
-            let ack: GdaxOrderAck = serde_json::from_slice(&body)
+            let ack: GdaxOrderAck<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
 
@@ -238,8 +239,8 @@ impl Client {
     {
         let cancel = (*cancel).borrow();
 
-        let order_id = match self.order_ids.get(&cancel.order_id) {
-            Some(order_id) => order_id,
+        let endpoint = match self.order_ids.get(&cancel.order_id) {
+            Some(order_id) => format!("orders/{}", *order_id),
             None => {
                 warn!("called `cancel` with a not yet inserted order id");
                 return Box::new(
@@ -250,14 +251,12 @@ impl Client {
                     ).map_err(api::errors::ApiError::RestError).into_future()
                 );
             }
-        }.clone();
+        };
 
-        let fut = self.request(&format!("orders/{}", order_id), Method::DELETE, String::new())
+        let fut = self.request(&endpoint, Method::DELETE, String::new())
             .and_then(move |_|
         {
-            Ok(CancelAck {
-                order_id,
-            }.timestamped())
+            Ok(CancelAck.timestamped())
         });
         Box::new(fut)
     }
@@ -266,7 +265,7 @@ impl Client {
         -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
     {
         let fut = self.request("accounts", Method::GET, String::new()).and_then(|body| {
-            let accounts: Vec<GdaxAccount> = serde_json::from_slice(&body)
+            let accounts: Vec<GdaxAccount<'_>> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
             
@@ -288,11 +287,11 @@ impl Client {
             .join(self.request("currencies", Method::GET, String::new()))
             .and_then(|(body_products, body_currencies)|
         {
-            let products: Vec<GdaxProduct> = serde_json::from_slice(&body_products)
+            let products: Vec<GdaxProduct<'_>> = serde_json::from_slice(&body_products)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
 
-            let currencies: Vec<GdaxCurrency> = serde_json::from_slice(&body_currencies)
+            let currencies: Vec<GdaxCurrency<'_>> = serde_json::from_slice(&body_currencies)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
 

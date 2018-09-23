@@ -7,6 +7,7 @@ pub mod errors;
 pub mod timestamp;
 pub mod symbol;
 pub mod order_book;
+mod query_string;
 mod wss;
 
 use futures::prelude::*;
@@ -189,10 +190,7 @@ pub struct OrderAck {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An acknowledgment that a cancel order has been treated by the server.
-pub struct CancelAck {
-    /// ID identifying the canceled order.
-    pub order_id: String,
-}
+pub struct CancelAck;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// A notification that some order has been updated, i.e. a trade crossed through this order.

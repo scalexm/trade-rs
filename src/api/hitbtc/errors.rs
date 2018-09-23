@@ -4,6 +4,7 @@ use failure_derive::Fail;
 use serde_derive::Deserialize;
 use hyper::StatusCode;
 use std::fmt;
+use crate::api;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 pub(super) struct HitBtcRestError<'a> {
@@ -28,6 +29,49 @@ pub struct RestError {
     pub description: Option<String>,
 }
 
+impl api::errors::ErrorKinded<!> for RestError {
+    fn kind(&self) -> api::errors::RestErrorKind<!> {
+        if self.kind == RestErrorKind::TooManyRequests {
+            return api::errors::RestErrorKind::TooManyRequests;
+        }
+
+        if self.kind == RestErrorKind::Timeout {
+            return api::errors::RestErrorKind::UnknownStatus;
+        }
+
+        if self.kind == RestErrorKind::InternalError
+            || self.kind == RestErrorKind::ServiceUnavailable
+        {
+            return api::errors::RestErrorKind::OtherSide;
+        }
+
+        api::errors::RestErrorKind::InvalidRequest
+    }
+}
+
+impl api::errors::ErrorKinded<api::errors::CancelErrorKind> for RestError {
+    fn kind(&self) -> api::errors::RestErrorKind<api::errors::CancelErrorKind> {
+        if self.kind == RestErrorKind::BadRequest && self.error_code == 20002 {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::CancelErrorKind::UnknownOrder
+            );
+        }
+        <Self as api::errors::ErrorKinded<!>>::kind(self).into()
+    }
+}
+
+impl api::errors::ErrorKinded<api::errors::OrderErrorKind> for RestError {
+    fn kind(&self) -> api::errors::RestErrorKind<api::errors::OrderErrorKind> {
+        if self.kind == RestErrorKind::BadRequest && self.error_code == 20001 {
+            return api::errors::RestErrorKind::Specific(
+                api::errors::OrderErrorKind::InsufficientBalance
+            );
+        }
+
+        <Self as api::errors::ErrorKinded<!>>::kind(self).into()
+    }
+}
+
 impl fmt::Display for RestError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}: `{}` (", self.kind, self.error_msg)?;
@@ -36,6 +80,22 @@ impl fmt::Display for RestError {
         }
         write!(f, "[error_code = {}])", self.error_code)?;
         Ok(())
+    }
+}
+
+impl RestError {
+    pub(super) fn from_hit_btc_error(status: StatusCode, hit_btc_error: Option<HitBtcRestError>)
+        -> Self
+    {
+        RestError {
+            kind: RestErrorKind::from_status_code(status),
+            error_code: hit_btc_error.as_ref().map(|error| error.code).unwrap_or(-1),
+            error_msg: hit_btc_error.as_ref().map(|error| error.message.to_owned())
+                .unwrap_or_else(|| "<empty>".to_owned()),
+            description: hit_btc_error.and_then(
+                |error| error.description.map(|desc| desc.to_owned())
+            ),
+        }
     }
 }
 

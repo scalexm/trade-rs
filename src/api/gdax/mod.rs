@@ -142,10 +142,3 @@ impl GenerateOrderId for Client {
         Uuid::new_v4().to_string()
     }
 }
-
-fn convert_str_timestamp(timestamp: &str) -> Result<u64, chrono::ParseError> {
-    use chrono::{DateTime, Utc};
-
-    let time = timestamp.parse::<DateTime<Utc>>()?;
-    Ok((time.timestamp() as u64) * 1000 + u64::from(time.timestamp_subsec_millis()))
-}

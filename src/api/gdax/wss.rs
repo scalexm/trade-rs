@@ -17,8 +17,8 @@ use crate::api::{
 };
 use crate::api::symbol::Symbol;
 use crate::api::wss;
-use crate::api::timestamp::{timestamp_ms, IntoTimestamped};
-use crate::api::gdax::{convert_str_timestamp, Keys, Client};
+use crate::api::timestamp::{convert_str_timestamp, timestamp_ms, IntoTimestamped};
+use crate::api::gdax::{Keys, Client};
 
 impl Client {
     crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
@@ -176,7 +176,7 @@ impl HandlerImpl {
 
     /// Parse a (should-be) JSON message sent by gdax.
     fn parse_message(&mut self, json: &str, out: &wss::NotifSender) -> Result<(), failure::Error> {
-        let event_type: EventType = serde_json::from_str(json)?;
+        let event_type: EventType<'_> = serde_json::from_str(json)?;
 
         match event_type.type_ {
             "subscribe" => {
@@ -188,7 +188,7 @@ impl HandlerImpl {
             },
 
             "snapshot" => {
-                let snapshot: GdaxBookSnapshot = serde_json::from_str(json)?;
+                let snapshot: GdaxBookSnapshot<'_> = serde_json::from_str(json)?;
 
                 let bid = snapshot.bids
                     .into_iter()
@@ -207,7 +207,7 @@ impl HandlerImpl {
             },
 
             "l2update" => {
-                let update: GdaxLimitUpdate = serde_json::from_str(json)?;
+                let update: GdaxLimitUpdate<'_> = serde_json::from_str(json)?;
 
                 let updates = update.changes
                     .into_iter()
@@ -224,7 +224,7 @@ impl HandlerImpl {
             },
 
             "match" => {
-                let trade: GdaxMatch = serde_json::from_str(json)?;
+                let trade: GdaxMatch<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(trade.time)?;
                 
                 let size = self.symbol.size_tick().ticked(trade.size)?;
@@ -265,7 +265,7 @@ impl HandlerImpl {
             },
 
             "received" => {
-                let received: GdaxReceived = serde_json::from_str(json)?;
+                let received: GdaxReceived<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(received.time)?;
 
                 let size = self.symbol.size_tick().ticked(received.size)?;
@@ -297,7 +297,7 @@ impl HandlerImpl {
             }
 
             "done" => {
-                let done: GdaxDone = serde_json::from_str(json)?;
+                let done: GdaxDone<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(done.time)?;
 
                 if done.reason != "canceled" {
@@ -317,7 +317,7 @@ impl HandlerImpl {
             }
 
             "error" => {
-                let error: GdaxError = serde_json::from_str(json)?;
+                let error: GdaxError<'_> = serde_json::from_str(json)?;
                 bail!("{}: {:?}", error.message, error.reason);
             },
 

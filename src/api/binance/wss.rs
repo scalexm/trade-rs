@@ -197,11 +197,11 @@ impl HandlerImpl {
 
     /// Parse a (should-be) JSON message sent by binance.
     fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, failure::Error> {
-        let event_type: EventType = serde_json::from_str(json)?;
+        let event_type: EventType<'_> = serde_json::from_str(json)?;
 
         let notif = match event_type.e {
             "trade" => {
-                let trade: BinanceTrade = serde_json::from_str(json)?;
+                let trade: BinanceTrade<'_> = serde_json::from_str(json)?;
                 Some(
                     Notification::Trade(Trade {
                         size: self.symbol.size_tick().ticked(trade.q)?,
@@ -212,7 +212,7 @@ impl HandlerImpl {
             },
 
             "depthUpdate" => {
-                let depth_update: BinanceDepthUpdate = serde_json::from_str(json)?;
+                let depth_update: BinanceDepthUpdate<'_> = serde_json::from_str(json)?;
 
                 // The order is consistent if the previous `u + 1` is equal to current `U`.
                 if let Some(previous_u) = self.previous_u {
@@ -240,7 +240,7 @@ impl HandlerImpl {
             },
 
             "executionReport" => {
-                let report: BinanceExecutionReport = serde_json::from_str(json)?;
+                let report: BinanceExecutionReport<'_> = serde_json::from_str(json)?;
 
                 match report.x {
                     "NEW" => Some(
@@ -406,7 +406,7 @@ impl HandlerImpl {
                     )?;
                 }
 
-                let snapshot: BinanceBookSnapshot = serde_json::from_slice(&body)?;
+                let snapshot: BinanceBookSnapshot<'_> = serde_json::from_slice(&body)?;
                 Ok(snapshot.owned())
             }).then(move |res| {
                 let _ = snd.send(res);
