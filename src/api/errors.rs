@@ -195,3 +195,7 @@ impl From<RestErrorKind<!>> for RestErrorKind<OrderErrorKind> {
         }
     }
 }
+
+crate trait ErrorKinded<K: ErrorKind> {
+    fn kind(&self) -> RestErrorKind<K>;
+}

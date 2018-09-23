@@ -1,3 +1,5 @@
+//! A module defining types to work with discrete prices and quantities.
+//!
 //! On electronic exchanges, prices and sizes do not take continuous real values,
 //! but rather take their values on a discrete grid whose step is known as a *tick*.
 //! In other words, the price tick is the smallest possible change of the price of
@@ -145,8 +147,8 @@ impl Tick {
         self.0
     }
 
-    /// Convert an unticked value, e.g. "0.001" into a value expressed in ticks,
-    /// e.g. if `self.ticks_per_unit == 1000" then this would return `Ok(1)`.
+    /// Convert an unticked value, e.g. `"0.001"` into a value expressed in ticks,
+    /// e.g. if `self.ticks_per_unit == 1000` then this would return `Ok(1)`.
     /// Will truncate extra decimals if `self.ticks_per_unit()` is too low.
     /// 
     /// # Errors

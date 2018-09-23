@@ -1,17 +1,14 @@
-//! Implementation of `ApiClient` for the GDAX API.
+//! Implementation of `ApiClient` for the HitBTC API.
 
 pub mod errors;
-mod wss;
 mod rest;
+mod wss;
 
-use openssl::pkey::{PKey, Private};
-use chashmap::CHashMap;
+use serde_derive::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::borrow::Borrow;
-use std::sync::Arc;
-use futures::prelude::*;
-use serde_derive::{Serialize, Deserialize};
 use log::debug;
+use futures::prelude::*;
 use crate::api::{
     self,
     Params,
@@ -22,71 +19,39 @@ use crate::api::{
     OrderAck,
     Cancel,
     CancelAck,
-    Balances
+    Balances,
 };
 use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::timestamp::{Timestamped, IntoTimestamped};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// A GDAX key pair: api key + secret key, along with a pass phrase.
+/// An HitBTC key pair: public key + secret key.
 pub struct KeyPair {
-    api_key: String,
+    public_key: String,
     secret_key: String,
-    pass_phrase: String,
 }
 
 impl KeyPair {
-    /// Return a new key pair along with the associated pass phrase.
-    pub fn new(api_key: String, secret_key: String, pass_phrase: String) -> Self {
+    /// Return a new key pair.
+    pub fn new(public_key: String, secret_key: String) -> Self {
         KeyPair {
-            api_key,
+            public_key,
             secret_key,
-            pass_phrase,
         }
     }
 }
 
-#[derive(Clone)]
-struct Keys {
-    api_key: String,
-    secret_key: Arc<PKey<Private>>,
-    pass_phrase: String,
-}
-
-/// A GDAX API client.
 pub struct Client {
     params: Params,
-    keys: Option<Keys>,
-
-    /// client order id => server order id
-    order_ids: Arc<CHashMap<String, String>>,
-
+    keys: Option<KeyPair>,
     symbols: HashMap<String, Symbol>,
 }
 
 impl Client {
-    /// Create a new GDAX API client with given `params`. If `key_pair` is not
-    /// `None`, this will enable performing requests to the REST API and will forward
-    /// the user data stream. This method will block, fetching the available symbols
-    /// from GDAX.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
-        let keys = match key_pair {
-            Some(pair) => {
-                let secret_key = PKey::hmac(&base64::decode(&pair.secret_key)?)?;
-
-                Some(Keys {
-                    api_key: pair.api_key,
-                    secret_key: Arc::new(secret_key),
-                    pass_phrase: pair.pass_phrase,
-                })
-            },
-            None => None,
-        };
-
         let mut client = Client {
             params,
-            keys,
-            order_ids: Arc::new(CHashMap::new()),
+            keys: key_pair,
             symbols: HashMap::new(),
         };
 
@@ -137,8 +102,7 @@ impl ApiClient for Client {
 }
 
 impl GenerateOrderId for Client {
-    fn new_order_id(_: &str) -> String {
-        use uuid::Uuid;
-        Uuid::new_v4().to_string()
+    fn new_order_id(hint: &str) -> String {
+        hint.to_owned()
     }
 }

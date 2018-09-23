@@ -1,6 +1,4 @@
-use std::fmt;
-use openssl::{sign::Signer, hash::MessageDigest, pkey::{PKey, Private}};
-use hyper::{Method, Request, Body};
+use hyper::Method;
 use futures::prelude::*;
 use std::collections::HashMap;
 use std::borrow::Borrow;
@@ -18,56 +16,18 @@ use crate::api::{
     Cancel,
     CancelAck,
 };
+use crate::api::query_string::QueryString;
+use crate::api::errors::ErrorKinded;
 use crate::api::symbol::{Symbol, WithSymbol};
 use crate::api::binance::Client;
-use crate::api::binance::errors::{RestError, ErrorKinded};
+use crate::api::binance::errors::RestError;
 use crate::api::timestamp::{timestamp_ms, Timestamped, IntoTimestamped};
-
-struct QueryString {
-    query: String,
-}
-
-impl QueryString {
-    fn new() -> Self {
-        QueryString {
-            query: String::new(),
-        }
-    }
-
-    fn push<P: fmt::Display>(&mut self, name: &str, arg: P) {
-        use std::fmt::Write;
-
-        if self.query.is_empty() {
-            write!(&mut self.query, "{}={}", name, arg).unwrap();
-        } else {
-            write!(&mut self.query, "&{}={}", name, arg).unwrap();
-        }
-    }
-
-    fn into_string(self) -> String {
-        self.query
-    }
-
-    fn into_string_with_signature(mut self, key: &PKey<Private>) -> String {
-        let mut signer = Signer::new(MessageDigest::sha256(), key).unwrap();
-        signer.update(self.query.as_bytes()).unwrap();
-        let signature = hex::encode(&signer.sign_to_vec().unwrap());
-        self.push("signature", &signature);
-        self.query
-    }
-}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
 struct BinanceOrderAck<'a> {
     clientOrderId: &'a str,
     transactTime: u64,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct BinanceCancelAck<'a> {
-    origClientOrderId: &'a str,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -165,13 +125,19 @@ impl Client {
             + 'static
         > where RestError: ErrorKinded<K>
     {
-        let keys = self.keys.as_ref().expect(
-            "cannot perform an HTTP request without a binance key pair"
-        );
+        use hyper::{Request, Body};
+
+        let mut request = Request::builder();
 
         let query = match sig {
             Signature::No => query.into_string(),
-            Signature::Yes => query.into_string_with_signature(&keys.secret_key),
+            Signature::Yes => {
+                let keys = self.keys.as_ref().expect(
+                    "cannot perform a signed HTTP request without a binance key pair"
+                );
+                request.header("X-MBX-APIKEY", keys.api_key.as_bytes());
+                query.into_string_with_signature(&keys.secret_key)
+            }
         };
 
         let address = format!(
@@ -182,13 +148,9 @@ impl Client {
             query
         );
 
-        let request = Request::builder()
-            .method(method)
-            .uri(&address)
-            .header("X-MBX-APIKEY", keys.api_key.as_bytes())
-            .body(Body::empty());
-        
-        let request = match request {
+        request.method(method).uri(&address);
+
+        let request = match request.body(Body::empty()) {
             Ok(request) => request,
             Err(err) => return Box::new(
                 Err(err)
@@ -261,7 +223,7 @@ impl Client {
         let fut = self.request("api/v3/order", Method::POST, query, Signature::Yes)
             .and_then(|body|
         {
-            let ack: BinanceOrderAck = serde_json::from_slice(&body)
+            let ack: BinanceOrderAck<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
             Ok(OrderAck {
@@ -284,14 +246,9 @@ impl Client {
         query.push("timestamp", timestamp_ms());
 
         let fut = self.request("api/v3/order", Method::DELETE, query, Signature::Yes)
-            .and_then(|body|
+            .and_then(|_|
         {
-            let ack: BinanceCancelAck = serde_json::from_slice(&body)
-                .map_err(api::errors::RequestError::new)
-                .map_err(api::errors::ApiError::RequestError)?;
-            Ok(CancelAck {
-                order_id: ack.origClientOrderId.to_owned(),
-            }.timestamped())
+            Ok(CancelAck.timestamped())
         });
         Box::new(fut)
     }
@@ -303,7 +260,7 @@ impl Client {
         let fut = self.request("api/v1/userDataStream", Method::POST, query, Signature::No)
             .and_then(|body|
         {
-            let key: BinanceListenKey = serde_json::from_slice(&body)
+            let key: BinanceListenKey<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
             Ok(key.listenKey.to_owned())
@@ -337,14 +294,14 @@ impl Client {
         let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
             .and_then(|body|
         {
-            let info: BinanceAccountInformation = serde_json::from_slice(&body)
+            let info: BinanceAccountInformation<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
 
             let balances = info.balances.into_iter().map(|balance| {
                 (balance.asset.to_owned(), api::Balance {
                     free: balance.free.to_owned(),
-                    locked: balance.free.to_owned(),
+                    locked: balance.locked.to_owned(),
                 })
             }).collect();
             Ok(balances)
@@ -359,7 +316,7 @@ impl Client {
         let fut = self.request("api/v1/exchangeInfo", Method::GET, query, Signature::No)
             .and_then(|body|
         {
-            let info: BinanceExchangeInfo = serde_json::from_slice(&body)
+            let info: BinanceExchangeInfo<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
 
