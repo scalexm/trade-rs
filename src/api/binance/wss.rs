@@ -231,11 +231,12 @@ impl HandlerImpl {
                     .map(|l| self.convert_binance_update(l, Side::Ask))
                     .map(|l| Ok(l?.with_timestamp(depth_update.E)));
 
-                Some(
-                    Notification::LimitUpdates(
-                        bid.chain(ask).collect::<Result<Vec<_>, tick::ConversionError>>()?
-                    )
-                )
+                let updates =  bid.chain(ask).collect::<Result<Vec<_>, tick::ConversionError>>()?;
+                if !updates.is_empty() {
+                    Some(Notification::LimitUpdates(updates))
+                } else {
+                    None
+                }
             },
 
             "executionReport" => {

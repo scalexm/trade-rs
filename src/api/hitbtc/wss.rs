@@ -221,10 +221,11 @@ impl HandlerImpl {
                     .map(|l| self.convert_hit_btc_update(l, Side::Ask))
                     .map(|l| Ok(l?.timestamped()));
                 
-                let notif = Notification::LimitUpdates(
-                    bid.chain(ask).collect::<Result<Vec<_>, tick::ConversionError>>()?
-                );
-                out.unbounded_send(notif).unwrap();
+                let updates = bid.chain(ask).collect::<Result<Vec<_>, tick::ConversionError>>()?;
+                if !updates.is_empty() {
+                    let notif = Notification::LimitUpdates(updates);
+                    out.unbounded_send(notif).unwrap();
+                }
             }
 
             "snapshotTrades" => self.state.trades = true,

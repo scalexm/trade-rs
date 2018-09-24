@@ -216,10 +216,11 @@ impl HandlerImpl {
                     })
                     .map(|l: Result<_, failure::Error>| Ok(l?.timestamped()));
 
-                let notif = Notification::LimitUpdates(
-                    updates.collect::<Result<Vec<_>, failure::Error>>()?
-                );
-                out.unbounded_send(notif).unwrap();
+                let updates = updates.collect::<Result<Vec<_>, failure::Error>>()?;
+                if !updates.is_empty() {
+                    let notif = Notification::LimitUpdates(updates);
+                    out.unbounded_send(notif).unwrap();
+                }
             },
 
             "match" => {
