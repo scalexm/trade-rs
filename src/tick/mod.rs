@@ -248,9 +248,12 @@ impl Tick {
         for c in out[..used].iter().rev() {
             s.push(*c as u8);
         }
-        Ok(unsafe { String::from_utf8_unchecked(s) })
+
+        // We could use `from_utf8_unchecked`, but one never knows...
+        Ok(String::from_utf8(s).expect("cannot fail"))
     }
 
+    // Not optimized, don't care.
     crate fn tick_size(unticked: &str) -> Option<Tick> {
         if unticked.starts_with('1') || unticked.starts_with("1.") {
             return Some(Tick::new(1));

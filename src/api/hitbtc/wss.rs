@@ -306,7 +306,7 @@ impl wss::HandlerImpl for HandlerImpl {
 
         let subscription = HitBtcSubscription {
             method: "subscribeOrderbook",
-            params: params,
+            params,
         };
         
         match serde_json::to_string(&subscription) {
@@ -318,7 +318,7 @@ impl wss::HandlerImpl for HandlerImpl {
 
         let subscription = HitBtcSubscription {
             method: "subscribeTrades",
-            params: params,
+            params,
         };
         
         match serde_json::to_string(&subscription) {

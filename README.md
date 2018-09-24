@@ -12,5 +12,6 @@ streaming.
 Some sample code can be found in the `examples` folder.
 
 Exchanges currently implemented:
-* binance
+* Binance
 * GDAX
+* HitBTC

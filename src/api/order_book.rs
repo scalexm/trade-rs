@@ -1,6 +1,6 @@
 //! A module defining an helper data structure maintaining a live order book.
 
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use futures::prelude::*;
 use crate::order_book::OrderBook;
@@ -9,14 +9,14 @@ use crate::api::{ApiClient, Notification};
 /// A self-maintained live order book, updated each time the underlying
 /// exchange stream sends an update.
 pub struct LiveOrderBook {
-    order_book: Arc<RwLock<OrderBook>>,
+    order_book: Arc<Mutex<OrderBook>>,
 }
 
 /// State of the order book, indicating whether the underlying stream has
 /// disconnected or is still sending notifications.
 pub enum BookState<'a> {
     /// Live snapshot of the order book.
-    Live(RwLockReadGuard<'a, OrderBook>),
+    Live(MutexGuard<'a, OrderBook>),
 
     /// The exchange stream has disconnected (due to e.g. an error or a forced
     /// disconnection), hence the order book has gone out of sync and will never
@@ -27,7 +27,7 @@ pub enum BookState<'a> {
 impl LiveOrderBook {
     /// Build a self-maintained live order book from an exchange data stream.
     pub fn new<C: ApiClient>(stream: C::Stream) -> LiveOrderBook {
-        let order_book = Arc::new(RwLock::new(OrderBook::new()));
+        let order_book = Arc::new(Mutex::new(OrderBook::new()));
         let weak = order_book.clone();
 
         thread::spawn(move || {
@@ -35,7 +35,7 @@ impl LiveOrderBook {
             let fut = stream.for_each(|notif| {
                 if let Notification::LimitUpdates(updates) = notif {
                     if let Some(order_book) = weak.upgrade() {
-                        let mut order_book = order_book.write().unwrap();
+                        let mut order_book = order_book.lock().unwrap();
                         for update in updates {
                             order_book.update(update.into_inner());
                         }
@@ -62,7 +62,7 @@ impl LiveOrderBook {
             // The stream ended and released its weak reference.
             BookState::Disconnected
         } else {
-            BookState::Live(self.order_book.read().unwrap())
+            BookState::Live(self.order_book.lock().unwrap())
         }
     }
 }

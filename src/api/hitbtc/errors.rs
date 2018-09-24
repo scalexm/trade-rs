@@ -10,7 +10,7 @@ use crate::api;
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 pub(super) struct HitBtcRestError<'a> {
     code: i32,
-    message: Cow<'a, str>,
+    message: Cow<'a, str>, // error message can contain escaped characters
     description: Option<&'a str>,
 }
 
