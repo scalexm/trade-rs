@@ -233,7 +233,7 @@ impl Client {
     {
         let query = QueryString::new();
 
-        let fut = self.request("api/2/account/balance", Method::GET, query).and_then(|body|
+        let fut = self.request("api/2/trading/balance", Method::GET, query).and_then(|body|
         {
             let balances: Vec<HitBtcBalance<'_>> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
