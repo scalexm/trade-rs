@@ -1,4 +1,4 @@
 {
-    "ws_address": "wss://stream.binance.com:9443",
-    "http_address": "https://api.binance.com" 
+    "streaming_endpoint": "wss://stream.binance.com:9443",
+    "rest_endpoint": "https://api.binance.com" 
 }

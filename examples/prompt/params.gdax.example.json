@@ -1,4 +1,4 @@
 {
-    "ws_address": "wss://ws-feed.pro.coinbase.com",
-    "http_address": "https://api.pro.coinbase.com"
+    "streaming_endpoint": "wss://ws-feed.pro.coinbase.com",
+    "rest_endpoint": "https://api.pro.coinbase.com"
 }

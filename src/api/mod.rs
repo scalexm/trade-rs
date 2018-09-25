@@ -25,11 +25,11 @@ use self::symbol::{Symbol, WithSymbol};
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// Params needed for an API client.
 pub struct Params {
-    /// WebSocket API address.
-    pub ws_address: String,
+    /// Streaming API address (usually over WebSocket).
+    pub streaming_endpoint: String,
 
-    /// HTTP REST API address.
-    pub http_address: String,
+    /// REST API endpoint (usually over HTTP).
+    pub rest_endpoint: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]

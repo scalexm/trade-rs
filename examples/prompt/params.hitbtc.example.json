@@ -1,4 +1,4 @@
 {
-    "ws_address": "wss://api.hitbtc.com/api/2/ws",
-    "http_address": "https://api.hitbtc.com"
+    "streaming_endpoint": "wss://api.hitbtc.com",
+    "rest_endpoint": "https://api.hitbtc.com"
 }

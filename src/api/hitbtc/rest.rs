@@ -115,7 +115,7 @@ impl Client {
 
         let address = format!(
             "{}/{}",
-            self.params.http_address,
+            self.params.rest_endpoint,
             endpoint,
         );
 

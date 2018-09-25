@@ -44,3 +44,6 @@ criterion = "0.2"
  [[bench]]
 name = "tick"
 harness = false
+
+[[example]]
+name = "live_order_book"

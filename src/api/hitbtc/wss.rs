@@ -23,13 +23,13 @@ impl Client {
     crate fn new_stream(&self, symbol: Symbol, flags: NotificationFlags)
         -> UnboundedReceiver<Notification>
     {
-        let ws_address = self.params.ws_address.clone();
+        let streaming_endpoint = self.params.streaming_endpoint.clone();
         let keys = self.keys.clone();
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
-            debug!("initiating WebSocket connection at {}", ws_address);
+            debug!("initiating WebSocket connection at {}", streaming_endpoint);
             
-            if let Err(err) = ws::connect(ws_address.as_ref(), |out| {
+            if let Err(err) = ws::connect(streaming_endpoint.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::False, HandlerImpl {
                     symbol,
                     flags,

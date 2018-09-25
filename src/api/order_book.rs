@@ -1,10 +1,8 @@
 //! A module defining an helper data structure maintaining a live order book.
 
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::thread;
-use futures::prelude::*;
 use crate::order_book::OrderBook;
-use crate::api::{ApiClient, Notification};
+use crate::api::ApiClient;
 
 /// A self-maintained live order book, updated each time the underlying
 /// exchange stream sends an update.
@@ -26,18 +24,33 @@ pub enum BookState<'a> {
 
 impl LiveOrderBook {
     /// Build a self-maintained live order book from an exchange data stream.
+    /// The call will block until the initial snapshot of the order book has been
+    /// received.
     pub fn new<C: ApiClient>(stream: C::Stream) -> LiveOrderBook {
+        use std::thread;
+        use futures::prelude::*;
+        use crate::api::Notification;
+
         let order_book = Arc::new(Mutex::new(OrderBook::new()));
         let weak = order_book.clone();
 
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+
         thread::spawn(move || {
             let weak = Arc::downgrade(&weak);
+            let mut snapshot = false;
+
             let fut = stream.for_each(|notif| {
                 if let Notification::LimitUpdates(updates) = notif {
                     if let Some(order_book) = weak.upgrade() {
                         let mut order_book = order_book.lock().unwrap();
                         for update in updates {
                             order_book.update(update.into_inner());
+                        }
+
+                        if !snapshot {
+                            sender.send(()).unwrap();
+                            snapshot = true;
                         }
                     } else {
                         // The `LiveOrderBook` object was dropped.
@@ -51,12 +64,15 @@ impl LiveOrderBook {
             let _ = current_thread::block_on_all(fut);
         });
 
+        let _ = receiver.recv();
+
         LiveOrderBook {
             order_book,
         }
     }
 
-    /// Return the current state of the order book.
+    /// Return the current state of the order book. This method may return an object
+    /// holding a mutex lock: avoid keeping it alive for too long.
     pub fn order_book(&self) -> BookState<'_> {
         if Arc::weak_count(&self.order_book) == 0 {
             // The stream ended and released its weak reference.

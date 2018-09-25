@@ -34,7 +34,7 @@ impl Client {
         thread::spawn(move || {
             let mut address = format!(
                "{0}/ws/{1}@trade/{1}@depth",
-                params.ws_address,
+                params.streaming_endpoint,
                 symbol.name().to_lowercase(),
             );
             if let Some(listen_key) = listen_key {
@@ -379,7 +379,7 @@ impl HandlerImpl {
 
         let address = format!(
             "{}/api/v1/depth?symbol={}&limit=1000",
-            self.params.http_address,
+            self.params.rest_endpoint,
             self.symbol.name()
         ).parse().expect("invalid address");
 
