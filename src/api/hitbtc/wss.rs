@@ -8,6 +8,7 @@ use crate::order_book::LimitUpdate;
 use crate::tick;
 use crate::api::{
     Notification,
+    NotificationFlags,
     Trade,
     OrderConfirmation,
     OrderExpiration,
@@ -19,7 +20,9 @@ use crate::api::timestamp::{convert_str_timestamp, IntoTimestamped};
 use crate::api::hitbtc::{KeyPair, Client};
 
 impl Client {
-    crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
+    crate fn new_stream(&self, symbol: Symbol, flags: NotificationFlags)
+        -> UnboundedReceiver<Notification>
+    {
         let ws_address = self.params.ws_address.clone();
         let keys = self.keys.clone();
         let (snd, rcv) = unbounded();
@@ -29,6 +32,7 @@ impl Client {
             if let Err(err) = ws::connect(ws_address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::False, HandlerImpl {
                     symbol,
+                    flags,
                     state: SubscriptionState::new(),
                     keys: keys.clone(),
                     last_sequence: None,
@@ -64,6 +68,7 @@ type SequenceNumber = u64;
 
 struct HandlerImpl {
     symbol: Symbol,
+    flags: NotificationFlags,
     keys: Option<KeyPair>,
     state: SubscriptionState,
     last_sequence: Option<SequenceNumber>,
@@ -201,7 +206,9 @@ impl HandlerImpl {
         };
 
         match method {
-            "snapshotOrderbook" | "updateOrderbook" => {
+            "snapshotOrderbook" | "updateOrderbook"
+                if self.flags.contains(NotificationFlags::ORDER_BOOK) =>
+            {
                 let snapshot: HitBtcBookUpdate<'_> = serde_json::from_str(json)?;
 
                 if !self.last_sequence.map(|s| s + 1 == snapshot.params.sequence).unwrap_or(true) {
@@ -228,9 +235,11 @@ impl HandlerImpl {
                 }
             }
 
-            "snapshotTrades" => self.state.trades = true,
+            "snapshotTrades" if self.flags.contains(NotificationFlags::TRADES) => {
+                self.state.trades = true
+            }
 
-            "updateTrades" => {
+            "updateTrades" if self.flags.contains(NotificationFlags::TRADES) => {
                 let trades: HitBtcTrades<'_> = serde_json::from_str(json)?;
 
                 for trade in trades.params.data {
@@ -246,9 +255,11 @@ impl HandlerImpl {
                 }
             }
 
-            "activeOrders" => self.state.report = true,
+            "activeOrders" if self.flags.contains(NotificationFlags::ORDERS) => {
+                self.state.report = true
+            }
 
-            "report" => {
+            "report" if self.flags.contains(NotificationFlags::ORDERS) => {
                 let report: HitBtcReport<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(report.params.updatedAt)?;
 

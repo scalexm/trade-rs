@@ -18,7 +18,7 @@ pub mod prelude {
     //! and traits.
 
     pub use crate::tick::TickUnit;
-    pub use crate::api::ApiClient;
+    pub use crate::api::{ApiClient, Notification, NotificationFlags};
     pub use crate::api::symbol::{Symbol, WithSymbol};
     pub use crate::api::order_book::{LiveOrderBook, BookState};
     pub use crate::Side;

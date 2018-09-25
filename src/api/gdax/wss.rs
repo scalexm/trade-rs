@@ -10,6 +10,7 @@ use crate::{tick, Side};
 use crate::order_book::LimitUpdate;
 use crate::api::{
     Notification,
+    NotificationFlags,
     OrderConfirmation,
     OrderUpdate,
     Trade,
@@ -21,7 +22,9 @@ use crate::api::timestamp::{convert_str_timestamp, timestamp_ms, IntoTimestamped
 use crate::api::gdax::{Keys, Client};
 
 impl Client {
-    crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
+    crate fn new_stream(&self, symbol: Symbol, flags: NotificationFlags)
+        -> UnboundedReceiver<Notification>
+    {
         let ws_address = self.params.ws_address.clone();
         let keys = self.keys.clone();
         let order_ids = self.order_ids.clone();
@@ -32,6 +35,7 @@ impl Client {
             if let Err(err) = ws::connect(ws_address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::False, HandlerImpl {
                     symbol,
+                    flags,
                     state: SubscriptionState::NotSubscribed,
                     keys: keys.clone(),
                     orders: HashMap::new(),
@@ -55,6 +59,7 @@ enum SubscriptionState {
 
 struct HandlerImpl {
     symbol: Symbol,
+    flags: NotificationFlags,
     state: SubscriptionState,
     keys: Option<Keys>,
 
@@ -186,7 +191,7 @@ impl HandlerImpl {
                 self.state = SubscriptionState::Subscribed;
             },
 
-            "snapshot" => {
+            "snapshot" if self.flags.contains(NotificationFlags::ORDER_BOOK) => {
                 let snapshot: GdaxBookSnapshot<'_> = serde_json::from_str(json)?;
 
                 let bid = snapshot.bids
@@ -205,7 +210,7 @@ impl HandlerImpl {
                 out.unbounded_send(notif).unwrap();
             },
 
-            "l2update" => {
+            "l2update" if self.flags.contains(NotificationFlags::ORDER_BOOK) => {
                 let update: GdaxLimitUpdate<'_> = serde_json::from_str(json)?;
 
                 let updates = update.changes
@@ -223,7 +228,9 @@ impl HandlerImpl {
                 }
             },
 
-            "match" => {
+            "match"
+                if self.flags.contains(NotificationFlags::TRADES | NotificationFlags::ORDERS) =>
+            {
                 let trade: GdaxMatch<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(trade.time)?;
                 
@@ -231,7 +238,7 @@ impl HandlerImpl {
                 let price = self.symbol.price_tick().ticked(trade.price)?;
 
                 // An order which is about us
-                if trade.profile_id.is_some() {
+                if self.flags.contains(NotificationFlags::ORDERS) && trade.profile_id.is_some() {
                     let update_order = |order: &mut OrderConfirmation| {
                         order.size -= size;
 
@@ -255,16 +262,18 @@ impl HandlerImpl {
                     }
                 }
 
-                out.unbounded_send(
-                    Notification::Trade(Trade {
-                        size,
-                        price,
-                        maker_side: self.convert_gdax_side(trade.side)?,
-                    }.with_timestamp(timestamp))
-                ).unwrap();
+                if self.flags.contains(NotificationFlags::TRADES) {
+                    out.unbounded_send(
+                        Notification::Trade(Trade {
+                            size,
+                            price,
+                            maker_side: self.convert_gdax_side(trade.side)?,
+                        }.with_timestamp(timestamp))
+                    ).unwrap();
+                }
             },
 
-            "received" => {
+            "received" if self.flags.contains(NotificationFlags::ORDERS) => {
                 let received: GdaxReceived<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(received.time)?;
 
@@ -296,7 +305,7 @@ impl HandlerImpl {
                 ).unwrap();
             }
 
-            "done" => {
+            "done" if self.flags.contains(NotificationFlags::ORDERS) => {
                 let done: GdaxDone<'_> = serde_json::from_str(json)?;
                 let timestamp = convert_str_timestamp(done.time)?;
 

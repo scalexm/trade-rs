@@ -14,6 +14,7 @@ use futures::prelude::*;
 use std::collections::HashMap;
 use std::borrow::Borrow;
 use serde_derive::{Serialize, Deserialize};
+use bitflags::bitflags;
 use crate::Side;
 use crate::tick::{TickUnit, Tickable};
 use crate::order_book::LimitUpdate;
@@ -272,6 +273,23 @@ pub enum Notification {
     OrderExpiration(Timestamped<OrderExpiration>),
 }
 
+bitflags! {
+    /// Bit flags indicating which type of notification to forward.
+    pub struct NotificationFlags: u8 {
+        /// Forward limit updates of the order book.
+        const ORDER_BOOK = 0b0001;
+
+        /// Forward trades.
+        const TRADES = 0b0010;
+
+        /// Forward order confirmations and updates.
+        const ORDERS = 0b0100;
+
+        /// Forward all notifications.
+        const ALL = Self::ORDER_BOOK.bits | Self::TRADES.bits | Self::ORDERS.bits;
+    }
+}
+
 /// Generate order ids.
 pub trait GenerateOrderId {
     /// Use `hint` for generating an order id. Except for
@@ -301,8 +319,13 @@ pub trait ApiClient: GenerateOrderId {
     /// Find a symbol by name.
     fn find_symbol(&self, symbol: &str) -> Option<Symbol>;
 
+    /// Start streaming notifications, only forward those indicated by `flags`.
+    fn stream_with_flags(&self, symbol: Symbol, flags: NotificationFlags) -> Self::Stream;
+
     /// Start streaming notifications.
-    fn stream(&self, symbol: Symbol) -> Self::Stream;
+    fn stream(&self, symbol: Symbol) -> Self::Stream {
+        self.stream_with_flags(symbol, NotificationFlags::ALL)
+    }
 
     /// Send an order to the exchange.
     fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)

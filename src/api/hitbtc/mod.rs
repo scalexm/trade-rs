@@ -15,6 +15,7 @@ use crate::api::{
     ApiClient,
     GenerateOrderId,
     Notification,
+    NotificationFlags,
     Order,
     OrderAck,
     Cancel,
@@ -76,8 +77,8 @@ impl ApiClient for Client {
         self.symbols.get(&symbol.to_lowercase()).cloned()
     }
 
-    fn stream(&self, symbol: Symbol) -> Self::Stream {
-        self.new_stream(symbol)
+    fn stream_with_flags(&self, symbol: Symbol, flags: NotificationFlags) -> Self::Stream {
+        self.new_stream(symbol, flags)
     }
 
     fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)

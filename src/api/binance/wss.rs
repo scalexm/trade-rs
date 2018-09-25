@@ -10,6 +10,7 @@ use crate::{tick, Side};
 use crate::order_book::LimitUpdate;
 use crate::api::{
     Notification,
+    NotificationFlags,
     Params,
     Trade,
     OrderConfirmation,
@@ -24,7 +25,9 @@ use crate::api::binance::errors::RestError;
 
 
 impl Client {
-    crate fn new_stream(&self, symbol: Symbol) -> UnboundedReceiver<Notification> {
+    crate fn new_stream(&self, symbol: Symbol, flags: NotificationFlags)
+        -> UnboundedReceiver<Notification>
+    {
         let params = self.params.clone();
         let listen_key = self.keys.as_ref().map(|keys| keys.listen_key.clone());
         let (snd, rcv) = unbounded();
@@ -41,8 +44,9 @@ impl Client {
 
             if let Err(err) = ws::connect(address.as_ref(), |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::True, HandlerImpl{
-                    params: params.clone(),
+                    flags,
                     symbol,
+                    params: params.clone(),
                     book_snapshot_state: BookSnapshotState::None,
                     previous_u: None,
                 })
@@ -85,8 +89,9 @@ enum BookSnapshotState {
 }
 
 struct HandlerImpl {
-    params: Params,
     symbol: Symbol,
+    flags: NotificationFlags,
+    params: Params,
     book_snapshot_state: BookSnapshotState,
 
     /// We keep track of the last `u` indicator sent by binance, this is used for checking
@@ -200,7 +205,7 @@ impl HandlerImpl {
         let event_type: EventType<'_> = serde_json::from_str(json)?;
 
         let notif = match event_type.e {
-            "trade" => {
+            "trade" if self.flags.contains(NotificationFlags::TRADES) => {
                 let trade: BinanceTrade<'_> = serde_json::from_str(json)?;
                 Some(
                     Notification::Trade(Trade {
@@ -211,7 +216,7 @@ impl HandlerImpl {
                 )
             },
 
-            "depthUpdate" => {
+            "depthUpdate" if self.flags.contains(NotificationFlags::ORDER_BOOK) => {
                 let depth_update: BinanceDepthUpdate<'_> = serde_json::from_str(json)?;
 
                 // The order is consistent if the previous `u + 1` is equal to current `U`.
@@ -239,7 +244,7 @@ impl HandlerImpl {
                 }
             },
 
-            "executionReport" => {
+            "executionReport" if self.flags.contains(NotificationFlags::ORDERS) => {
                 let report: BinanceExecutionReport<'_> = serde_json::from_str(json)?;
 
                 match report.x {
