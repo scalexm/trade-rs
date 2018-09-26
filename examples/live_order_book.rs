@@ -2,6 +2,7 @@ use trade::prelude::*;
 use failure::{format_err, bail};
 
 /// Send one buy order at `(best bid) - margin` and one sell order at `(best ask) + margin`.
+/// Do not wait for the orders to be filled, just wait that they are confirmed by the exchange.
 /// 
 /// `margin` is measured in tick units, i.e. the smallest possible price increment. For symbols
 /// quoted in USD/USDT/TUSD, one tick unit is usually equal to one cent (0.01$).

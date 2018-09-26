@@ -135,19 +135,8 @@ impl Client {
                     .into_future()
             )
         };
-        
-        let https = match hyper_tls::HttpsConnector::new(2) {
-            Ok(https) => https,
-            Err(err) => return Box::new(
-                Err(err)
-                    .map_err(api::errors::RequestError::new)
-                    .map_err(api::errors::ApiError::RequestError)
-                    .into_future()
-            ),
-        };
 
-        let client = hyper::Client::builder().build::<_, hyper::Body>(https);
-        let fut = client.request(request).and_then(|res| {
+        let fut = self.http_client.request(request).and_then(|res| {
             let status = res.status();
             res.into_body().concat2().and_then(move |body| {
                 Ok((status, body))

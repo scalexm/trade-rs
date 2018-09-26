@@ -47,6 +47,7 @@ pub struct Client {
     params: Params,
     keys: Option<KeyPair>,
     symbols: HashMap<String, Symbol>,
+    http_client: hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
 }
 
 impl Client {
@@ -57,10 +58,15 @@ impl Client {
     /// # Note
     /// This method will block, fetching the available symbols from HitBTC.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
+        let http_client = hyper::Client::builder().build::<_, hyper::Body>(
+            hyper_tls::HttpsConnector::new(2)?
+        );
+
         let mut client = Client {
             params,
             keys: key_pair,
             symbols: HashMap::new(),
+            http_client,
         };
 
         use tokio::runtime::current_thread;

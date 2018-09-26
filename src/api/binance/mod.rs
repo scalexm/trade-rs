@@ -57,13 +57,14 @@ struct Keys {
 /// 
 /// The listen key is only valid for 60 minutes after its creation (through `Client::new`).
 /// Each `<Client as ApiClient>::ping` request will extend its validity for 60 minutes. Binance
-/// recommends sending a ping every 30 minutes.
-/// If the listen key becomes invalid, this client will stop forwarding the user data stream.
-/// The only way to fix it will be to drop the client and create a new one.
+/// recommends sending a ping every 30 minutes. If the listen key becomes invalid, this client
+/// will stop forwarding the user data stream. The only way to fix it will be to drop the client
+/// and create a new one.
 pub struct Client {
     params: Params,
     keys: Option<Keys>,
     symbols: HashMap<String, Symbol>,
+    http_client: hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
 }
 
 impl Client {
@@ -77,6 +78,10 @@ impl Client {
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         use tokio::runtime::current_thread;
 
+        let http_client = hyper::Client::builder().build::<_, hyper::Body>(
+            hyper_tls::HttpsConnector::new(2)?
+        );
+
         let mut client = match key_pair {
             Some(pair) => {
                 let secret_key = PKey::hmac(pair.secret_key.as_bytes())?;
@@ -89,6 +94,7 @@ impl Client {
                         listen_key: String::new(),
                     }),
                     symbols: HashMap::new(),
+                    http_client,
                 };
 
                 debug!("requesting listen key");
@@ -103,6 +109,7 @@ impl Client {
                 params,
                 keys: None,
                 symbols: HashMap::new(),
+                http_client,
             }
         };
 

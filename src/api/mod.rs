@@ -339,6 +339,9 @@ pub trait ApiClient: GenerateOrderId {
         -> Box<Future<Item = Timestamped<OrderAck>, Error = errors::OrderError> + Send + 'static>;
 
     /// Send a cancel order to the exchange.
+    ///
+    /// # Note
+    /// Do no try to cancel an order if said order has not yet been confirmed by the exchange.
     fn cancel<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
         -> Box<Future<Item = Timestamped<CancelAck>, Error = errors::CancelError> + Send + 'static>;
 

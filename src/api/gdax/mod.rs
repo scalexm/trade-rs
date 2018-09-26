@@ -63,6 +63,7 @@ pub struct Client {
     order_ids: Arc<CHashMap<String, String>>,
 
     symbols: HashMap<String, Symbol>,
+    http_client: hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
 }
 
 impl Client {
@@ -86,11 +87,16 @@ impl Client {
             None => None,
         };
 
+        let http_client = hyper::Client::builder().build::<_, hyper::Body>(
+            hyper_tls::HttpsConnector::new(2)?
+        );
+
         let mut client = Client {
             params,
             keys,
             order_ids: Arc::new(CHashMap::new()),
             symbols: HashMap::new(),
+            http_client,
         };
 
         use tokio::runtime::current_thread;
