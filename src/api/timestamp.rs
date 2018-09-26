@@ -17,7 +17,7 @@ pub fn timestamp_ms() -> Timestamp {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// Wrapper around a type carrying an additionnal timestamp. Deref to `T`.
+/// Wrapper around a type carrying an additional timestamp. Deref to `T`.
 pub struct Timestamped<T> {
     timestamp: Timestamp,
     #[serde(flatten)]

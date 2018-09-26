@@ -40,9 +40,10 @@ impl Client {
             if let Some(listen_key) = listen_key {
                 address += &format!("/{}", listen_key);
             }
+
             debug!("initiating WebSocket connection at {}", address);
 
-            if let Err(err) = ws::connect(address.as_ref(), |out| {
+            if let Err(err) = ws::connect(address, |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::True, HandlerImpl{
                     flags,
                     symbol,
@@ -94,14 +95,13 @@ struct HandlerImpl {
     params: Params,
     book_snapshot_state: BookSnapshotState,
 
-    /// We keep track of the last `u` indicator sent by binance, this is used for checking
-    /// the coherency of the ordering of the events sent by binance.
+    /// Keep track of the `u` indicator sent by binance, this is used for checking
+    /// the of the ordering of the limit updates.
     previous_u: Option<u64>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
-/// A JSON representation of a trade, sent by binance.
 struct BinanceTrade<'a> {
     p: &'a str,
     q: &'a str,
@@ -110,7 +110,6 @@ struct BinanceTrade<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-/// A JSON representation of a limit update, embedded into other binance events.
 struct BinanceLimitUpdate<'a> {
     #[serde(borrow)]
     price: Cow<'a, str>,
@@ -131,7 +130,6 @@ impl<'a> BinanceLimitUpdate<'a> {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
-/// A JSON representation of an orderbook update, sent by binance.
 struct BinanceDepthUpdate<'a> {
     E: u64,
     U: u64,
@@ -144,7 +142,6 @@ struct BinanceDepthUpdate<'a> {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
-/// A JSON representation of an orderbook snapshot, sent by binance.
 struct BinanceBookSnapshot<'a> {
     lastUpdateId: u64,
     #[serde(borrow)]
@@ -165,7 +162,6 @@ impl<'a> BinanceBookSnapshot<'a> {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
 #[allow(non_snake_case)]
-/// A JSON representation of an order update, sent by binance.
 struct BinanceExecutionReport<'a> {
     c: &'a str,
     C: &'a str,
@@ -186,8 +182,6 @@ struct EventType<'a> {
 }
 
 impl HandlerImpl {
-    /// Utility function for converting a `BinanceLimitUpdate` into a `LimitUpdate` (with
-    /// conversion in ticks and so on).
     fn convert_binance_update(&self, l: &BinanceLimitUpdate, side: Side)
         -> Result<LimitUpdate, tick::ConversionError>
     {
@@ -200,7 +194,6 @@ impl HandlerImpl {
         )
     }
 
-    /// Parse a (should-be) JSON message sent by binance.
     fn parse_message(&mut self, json: &str) -> Result<Option<Notification>, failure::Error> {
         let event_type: EventType<'_> = serde_json::from_str(json)?;
 
@@ -219,7 +212,7 @@ impl HandlerImpl {
             "depthUpdate" if self.flags.contains(NotificationFlags::ORDER_BOOK) => {
                 let depth_update: BinanceDepthUpdate<'_> = serde_json::from_str(json)?;
 
-                // The order is consistent if the previous `u + 1` is equal to current `U`.
+                // The order book is consistent if the previous `u + 1` is equal to current `U`.
                 if let Some(previous_u) = self.previous_u {
                     if previous_u + 1 != depth_update.U {
                         panic!("previous `u + 1` and current `U` do not match");
@@ -363,7 +356,7 @@ impl HandlerImpl {
     }
 
     fn request_book_snapshot(&mut self, updates: Vec<Timestamped<LimitUpdate>>) {
-        let (snd, rcv) = mpsc::channel();
+        let (snd, rcv) = mpsc::sync_channel(1);
 
         self.book_snapshot_state = BookSnapshotState::Waiting(
             BookWaitingState {

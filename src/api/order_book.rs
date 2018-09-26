@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use crate::order_book::OrderBook;
 use crate::api::ApiClient;
 
-/// A self-maintained live order book, updated each time the underlying
-/// exchange stream sends an update.
+/// A self-maintained live order book, updated in the background each time
+/// the underlying exchange stream sends an update.
 pub struct LiveOrderBook {
     order_book: Arc<Mutex<OrderBook>>,
 }
@@ -24,6 +24,8 @@ pub enum BookState<'a> {
 
 impl LiveOrderBook {
     /// Build a self-maintained live order book from an exchange data stream.
+    ///
+    /// # Note
     /// The call will block until the initial snapshot of the order book has been
     /// received.
     pub fn new<C: ApiClient>(stream: C::Stream) -> LiveOrderBook {
@@ -34,7 +36,7 @@ impl LiveOrderBook {
         let order_book = Arc::new(Mutex::new(OrderBook::new()));
         let weak = order_book.clone();
 
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = std::sync::mpsc::sync_channel(0);
 
         thread::spawn(move || {
             let weak = Arc::downgrade(&weak);
@@ -71,8 +73,11 @@ impl LiveOrderBook {
         }
     }
 
-    /// Return the current state of the order book. This method may return an object
-    /// holding a mutex lock: avoid keeping it alive for too long.
+    /// Return the current state of the order book.
+    ///
+    /// # Note
+    /// This method may return an object holding a mutex lock: avoid keeping it
+    /// alive for too long.
     pub fn order_book(&self) -> BookState<'_> {
         if Arc::weak_count(&self.order_book) == 0 {
             // The stream ended and released its weak reference.

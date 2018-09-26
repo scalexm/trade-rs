@@ -32,7 +32,7 @@ impl Client {
         thread::spawn(move || {
             debug!("initiating WebSocket connection at {}", streaming_endpoint);
             
-            if let Err(err) = ws::connect(streaming_endpoint.as_ref(), |out| {
+            if let Err(err) = ws::connect(streaming_endpoint, |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::False, HandlerImpl {
                     symbol,
                     flags,
@@ -89,7 +89,6 @@ struct GdaxAuth<'a> {
 }
 
 #[derive(Clone, Debug, Serialize)]
-/// Subscription parameters to be sent to GDAX.
 struct GdaxSubscription<'a> {
     #[serde(rename = "type")]
     type_: &'a str,
@@ -101,7 +100,6 @@ struct GdaxSubscription<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-/// A JSON representation of an order book snapshot, sent by GDAX.
 struct GdaxBookSnapshot<'a> {
     #[serde(borrow)]
     bids: Vec<(&'a str, &'a str)>,
@@ -110,14 +108,12 @@ struct GdaxBookSnapshot<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-/// A JSON representation of an order book update, sent by GDAX.
 struct GdaxLimitUpdate<'a> {
     #[serde(borrow)]
     changes: Vec<(&'a str, &'a str, &'a str)>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
-/// A JSON representation of a trade, sent by GDAX.
 struct GdaxMatch<'a> {
     time: &'a str,
     size: &'a str,
@@ -179,7 +175,6 @@ impl HandlerImpl {
         Ok(side)
     }
 
-    /// Parse a (should-be) JSON message sent by gdax.
     fn parse_message(&mut self, json: &str, out: &wss::NotifSender) -> Result<(), failure::Error> {
         let event_type: EventType<'_> = serde_json::from_str(json)?;
 

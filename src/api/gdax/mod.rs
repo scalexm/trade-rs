@@ -68,8 +68,10 @@ pub struct Client {
 impl Client {
     /// Create a new GDAX API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will forward
-    /// the user data stream. This method will block, fetching the available symbols
-    /// from GDAX.
+    /// the user data stream.
+    ///
+    /// # Note
+    /// This method will block, fetching the available symbols from GDAX.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         let keys = match key_pair {
             Some(pair) => {

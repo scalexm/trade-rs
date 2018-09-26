@@ -149,6 +149,8 @@ impl Tick {
 
     /// Convert an unticked value, e.g. `"0.001"` into a value expressed in ticks,
     /// e.g. if `self.ticks_per_unit == 1000` then this would return `Ok(1)`.
+    ///
+    /// # Note
     /// Will truncate extra decimals if `self.ticks_per_unit()` is too low.
     /// 
     /// # Errors

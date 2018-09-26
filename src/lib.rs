@@ -27,11 +27,11 @@ pub mod prelude {
 use serde_derive::{Serialize, Deserialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-/// Side of an order (bid or ask).
+/// Side of an order.
 pub enum Side {
-    /// Bid side.
+    /// Bid / buy side.
     Bid,
 
-    /// Ask side.
+    /// Ask / sell side.
     Ask,
 }

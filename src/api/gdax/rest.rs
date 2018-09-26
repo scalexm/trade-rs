@@ -91,7 +91,7 @@ impl AsStr for TimeInForce {
 impl Client {
     fn request<K: api::errors::ErrorKind>(
         &self,
-        endpoint: &str,
+        path: &str,
         method: Method,
         body: String
     ) -> Box<
@@ -103,7 +103,7 @@ impl Client {
         let address = format!(
             "{}/{}",
             self.params.rest_endpoint,
-            endpoint,
+            path,
         );
 
         let mut request = Request::builder();
@@ -111,7 +111,7 @@ impl Client {
         if let Some(keys) = self.keys.as_ref() {
             let timestamp = timestamp_ms() as f64 / 1000.;
             let mut signer = Signer::new(MessageDigest::sha256(), &keys.secret_key).unwrap();
-            let what = format!("{}{}/{}{}", timestamp, method, endpoint, body);
+            let what = format!("{}{}/{}{}", timestamp, method, path, body);
             signer.update(what.as_bytes()).unwrap();
             let signature = base64::encode(&signer.sign_to_vec().unwrap());
 
@@ -253,9 +253,7 @@ impl Client {
             }
         };
 
-        let fut = self.request(&endpoint, Method::DELETE, String::new())
-            .and_then(move |_|
-        {
+        let fut = self.request(&endpoint, Method::DELETE, String::new()).and_then(move |_| {
             Ok(CancelAck.timestamped())
         });
         Box::new(fut)

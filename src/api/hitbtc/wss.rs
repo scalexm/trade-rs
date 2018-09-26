@@ -27,9 +27,14 @@ impl Client {
         let keys = self.keys.clone();
         let (snd, rcv) = unbounded();
         thread::spawn(move || {
-            debug!("initiating WebSocket connection at {}", streaming_endpoint);
+            let address = format!(
+               "{}/api/2/ws",
+                streaming_endpoint,
+            );
+
+            debug!("initiating WebSocket connection at {}", address);
             
-            if let Err(err) = ws::connect(streaming_endpoint.as_ref(), |out| {
+            if let Err(err) = ws::connect(address, |out| {
                 wss::Handler::new(out, snd.clone(), wss::KeepAlive::False, HandlerImpl {
                     symbol,
                     flags,
@@ -71,6 +76,9 @@ struct HandlerImpl {
     flags: NotificationFlags,
     keys: Option<KeyPair>,
     state: SubscriptionState,
+
+    /// Keep track of the sequence number sent by HitBTC, this is used for checking
+    /// the of the ordering of the limit updates.
     last_sequence: Option<SequenceNumber>,
 }
 

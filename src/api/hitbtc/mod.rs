@@ -41,6 +41,7 @@ impl KeyPair {
         }
     }
 }
+
 /// An HitBTC API client.
 pub struct Client {
     params: Params,
@@ -51,8 +52,10 @@ pub struct Client {
 impl Client {
     /// Create a new HitBTC API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will forward
-    /// the user data stream. This method will block, fetching the available symbols
-    /// from HitBTC.
+    /// the user data stream.
+    ///
+    /// # Note
+    /// This method will block, fetching the available symbols from HitBTC.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         let mut client = Client {
             params,

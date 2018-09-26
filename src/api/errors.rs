@@ -120,7 +120,7 @@ pub enum RestErrorKind<K: ErrorKind> {
 }
 
 #[derive(Debug)]
-/// An error inherent to the HTTP request.
+/// An error inherent to the underlying network request.
 pub struct RequestError {
     inner: Box<failure::Fail>,
 }
@@ -156,8 +156,8 @@ pub enum ApiError<K: ErrorKind> {
     /// An error coming from the REST API.
     RestError(#[cause] RestError<K>),
 
-    #[fail(display = "HTTP request error")]
-    /// An error about the underlying HTTP request.
+    #[fail(display = "Network request error")]
+    /// An error about the underlying network request.
     RequestError(#[cause] RequestError),
 }
 

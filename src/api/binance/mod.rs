@@ -69,7 +69,10 @@ pub struct Client {
 impl Client {
     /// Create a new binance API client with given `params`. If `key_pair` is not
     /// `None`, this will enable performing requests to the REST API and will request
-    /// a listen key for the user data stream. The request will block the thread.
+    /// a listen key for the user data stream.
+    ///
+    /// # Note
+    /// The request may block the thread if requesting a listen key for the user data stream.
     /// The method will also block when fetching the available symbols from binance.
     pub fn new(params: Params, key_pair: Option<KeyPair>) -> Result<Self, failure::Error> {
         use tokio::runtime::current_thread;

@@ -13,5 +13,5 @@ Some sample code can be found in the `examples` folder.
 
 Exchanges currently implemented:
 * Binance
-* GDAX
+* GDAX a.k.a Coinbase Pro
 * HitBTC

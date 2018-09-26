@@ -74,12 +74,6 @@ struct BinanceExchangeInfo<'a> {
     symbols: Vec<BinanceSymbol<'a>>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-enum Signature {
-    No,
-    Yes,
-}
-
 trait AsStr {
     fn as_str(self) -> &'static str;
 }
@@ -115,10 +109,9 @@ impl AsStr for TimeInForce {
 impl Client {
     fn request<K: api::errors::ErrorKind>(
         &self,
-        endpoint: &str,
+        path: &str,
         method: Method,
-        query: QueryString,
-        sig: Signature
+        query: QueryString
     ) -> Box<
             Future<Item = hyper::Chunk, Error = api::errors::ApiError<K>>
             + Send
@@ -129,12 +122,9 @@ impl Client {
 
         let mut request = Request::builder();
 
-        let query = match sig {
-            Signature::No => query.into_string(),
-            Signature::Yes => {
-                let keys = self.keys.as_ref().expect(
-                    "cannot perform a signed HTTP request without a binance key pair"
-                );
+        let query = match self.keys.as_ref() {
+            None => query.into_string(),
+            Some(keys) => {
                 request.header("X-MBX-APIKEY", keys.api_key.as_bytes());
                 query.into_string_with_signature(&keys.secret_key)
             }
@@ -143,7 +133,7 @@ impl Client {
         let address = format!(
             "{}/{}",
             self.params.rest_endpoint,
-            endpoint,
+            path,
         );
 
         request.method(method)
@@ -221,7 +211,7 @@ impl Client {
         query.push("recvWindow", order.time_window);
         query.push("timestamp", timestamp_ms());
 
-        let fut = self.request("api/v3/order", Method::POST, query, Signature::Yes)
+        let fut = self.request("api/v3/order", Method::POST, query)
             .and_then(|body|
         {
             let ack: BinanceOrderAck<'_> = serde_json::from_slice(&body)
@@ -246,9 +236,7 @@ impl Client {
         query.push("recvWindow", cancel.time_window);
         query.push("timestamp", timestamp_ms());
 
-        let fut = self.request("api/v3/order", Method::DELETE, query, Signature::Yes)
-            .and_then(|_|
-        {
+        let fut = self.request("api/v3/order", Method::DELETE, query).and_then(|_| {
             Ok(CancelAck.timestamped())
         });
         Box::new(fut)
@@ -258,9 +246,7 @@ impl Client {
         -> Box<Future<Item = String, Error = api::errors::Error> + Send + 'static>
     {
         let query = QueryString::new();
-        let fut = self.request("api/v1/userDataStream", Method::POST, query, Signature::No)
-            .and_then(|body|
-        {
+        let fut = self.request("api/v1/userDataStream", Method::POST, query).and_then(|body| {
             let key: BinanceListenKey<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -272,29 +258,26 @@ impl Client {
     crate fn ping_impl(&self)
         -> Box<Future<Item = Timestamped<()>, Error = api::errors::Error> + Send + 'static>
     {
-        let mut query = QueryString::new();
-        query.push(
-            "listenKey",
-            &self.keys.as_ref().expect(
-                "cannot perform an HTTP request without a binance key pair"
-            ).listen_key
-        );
+        if let Some(listen_key) = self.keys.as_ref().map(|keys| &keys.listen_key) {
+            let mut query = QueryString::new();
+            query.push("listenKey", listen_key);
 
-        let fut = self.request("api/v1/userDataStream", Method::PUT, query, Signature::No)
-            .and_then(|_| Ok(().timestamped()));
-        Box::new(fut)
+            let fut = self.request("api/v1/userDataStream", Method::PUT, query)
+                .and_then(|_| Ok(().timestamped()));
+            Box::new(fut)
+        } else {
+            Box::new(Ok(().timestamped()).into_future())
+        }
     }
 
     crate fn balances_impl(&self)
         -> Box<Future<Item = api::Balances, Error = api::errors::Error> + Send + 'static>
     {
         let mut query = QueryString::new();
-        query.push("recvWindow", 30000);
+        query.push("recvWindow", 5000);
         query.push("timestamp", timestamp_ms());
 
-        let fut = self.request("api/v3/account", Method::GET, query, Signature::Yes)
-            .and_then(|body|
-        {
+        let fut = self.request("api/v3/account", Method::GET, query).and_then(|body| {
             let info: BinanceAccountInformation<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -314,9 +297,7 @@ impl Client {
         -> Box<Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static>
     {
         let query = QueryString::new();
-        let fut = self.request("api/v1/exchangeInfo", Method::GET, query, Signature::No)
-            .and_then(|body|
-        {
+        let fut = self.request("api/v1/exchangeInfo", Method::GET, query).and_then(|body| {
             let info: BinanceExchangeInfo<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
