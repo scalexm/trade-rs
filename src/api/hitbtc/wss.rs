@@ -17,7 +17,7 @@ use crate::api::{
 use crate::api::wss;
 use crate::api::symbol::Symbol;
 use crate::api::timestamp::{convert_str_timestamp, IntoTimestamped};
-use crate::api::hitbtc::{KeyPair, Client};
+use crate::api::hitbtc::{Keys, Client};
 
 impl Client {
     crate fn new_stream(&self, symbol: Symbol, flags: NotificationFlags)
@@ -74,7 +74,7 @@ type SequenceNumber = u64;
 struct HandlerImpl {
     symbol: Symbol,
     flags: NotificationFlags,
-    keys: Option<KeyPair>,
+    keys: Option<Keys>,
     state: SubscriptionState,
 
     /// Keep track of the sequence number sent by HitBTC, this is used for checking

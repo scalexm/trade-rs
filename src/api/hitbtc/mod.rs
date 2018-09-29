@@ -42,10 +42,17 @@ impl KeyPair {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+struct Keys {
+    public_key: String,
+    secret_key: String,
+    auth_header: String,
+}
+
 /// An HitBTC API client.
 pub struct Client {
     params: Params,
-    keys: Option<KeyPair>,
+    keys: Option<Keys>,
     symbols: HashMap<String, Symbol>,
     http_client: hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
 }
@@ -64,7 +71,15 @@ impl Client {
 
         let mut client = Client {
             params,
-            keys: key_pair,
+            keys: key_pair.map(|key_pair| {
+                let pwd = format!("{}:{}", key_pair.public_key, key_pair.secret_key);
+                let pwd = base64::encode(pwd.as_bytes());
+                Keys {
+                    public_key: key_pair.public_key,
+                    secret_key: key_pair.secret_key,
+                    auth_header: format!("Basic {}", pwd),
+                }
+            }),
             symbols: HashMap::new(),
             http_client,
         };
