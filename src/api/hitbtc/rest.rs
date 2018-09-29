@@ -2,7 +2,6 @@ use serde_derive::Deserialize;
 use failure::Fail;
 use futures::prelude::*;
 use std::collections::HashMap;
-use std::borrow::Borrow;
 use hyper::Method;
 use log::error;
 use crate::Side;
@@ -95,11 +94,8 @@ impl Client {
         endpoint: &str,
         method: Method,
         query: QueryString,
-    ) -> Box<
-            Future<Item = hyper::Chunk, Error = api::errors::ApiError<K>>
-            + Send
-            + 'static
-        > where RestError: ErrorKinded<K>
+    ) -> impl Future<Item = hyper::Chunk, Error = api::errors::ApiError<K>> + Send + 'static
+            where RestError: ErrorKinded<K>
     {
         use hyper::Request;
 
@@ -122,17 +118,9 @@ impl Client {
             .header("Content-Type", &b"application/x-www-form-urlencoded"[..])
             .uri(&address);
 
-        let request = match request.body(query.into()) {
-            Ok(request) => request,
-            Err(err) => return Box::new(
-                Err(err)
-                    .map_err(api::errors::RequestError::new)
-                    .map_err(api::errors::ApiError::RequestError)
-                    .into_future()
-            )
-        };
-
-        let fut = self.http_client.request(request).and_then(|res| {
+        // Unwrap because it is a bug if this fails (header failed to parse or something)
+        let request = request.body(query.into()).unwrap();
+        self.http_client.request(request).and_then(|res| {
             let status = res.status();
             res.into_body().concat2().and_then(move |body| {
                 Ok((status, body))
@@ -150,34 +138,33 @@ impl Client {
                 )?;
             }
             Ok(body)
-        });
-        Box::new(fut)
+        })
     }
 
-    crate fn order_impl<T: Borrow<Order>>(&self, order: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
+    crate fn order_impl(&self, order: WithSymbol<&Order>)
+        -> impl Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static
     {
-        let symbol = order.symbol();
-        let order = (*order).borrow();
+        use std::borrow::Borrow;
 
         let mut query = QueryString::new();
-        query.push("symbol", symbol.name());
-        query.push("side", order.side.as_str());
-        query.push("type", order.type_.as_str());
-        query.push("timeInForce", order.time_in_force.as_str());
-        query.push(
+        let symbol = order.symbol();
+        query.push_str("symbol", symbol.name());
+        query.push_str("side", order.side.as_str());
+        query.push_str("type", order.type_.as_str());
+        query.push_str("timeInForce", order.time_in_force.as_str());
+        query.push_str(
             "quantity",
             order.size.unticked(symbol.size_tick()).borrow() as &str
         );
-        query.push(
+        query.push_str(
             "price",
             order.price.unticked(symbol.price_tick()).borrow() as &str
         );
         if let Some(order_id) = &order.order_id {
-            query.push("clientOrderId", order_id);
+            query.push_str("clientOrderId", order_id);
         }
 
-        let fut = self.request("api/2/order", Method::POST, query).and_then(|body| {
+        self.request("api/2/order", Method::POST, query).and_then(|body| {
             let ack: HitBtcOrderAck<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -189,19 +176,16 @@ impl Client {
             Ok(OrderAck {
                 order_id: ack.clientOrderId.to_owned(),
             }.with_timestamp(timestamp))
-        });
-        Box::new(fut)
+        })
     }
 
-    crate fn cancel_impl<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
+    crate fn cancel_impl(&self, cancel: WithSymbol<&Cancel>)
+        -> impl Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static
     {
-        let cancel = (*cancel).borrow();
+        let endpoint = format!("api/2/order/{}", cancel.order_id());
         let query = QueryString::new();
 
-        let fut = self.request(&format!("api/2/order/{}", cancel.order_id()), Method::DELETE, query)
-            .and_then(|body|
-        {
+        self.request(&endpoint, Method::DELETE, query).and_then(|body| {
             let ack: HitBtcCancelAck<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -211,17 +195,15 @@ impl Client {
                 .map_err(api::errors::ApiError::RequestError)?;
 
             Ok(CancelAck.with_timestamp(timestamp))
-        });
-        Box::new(fut)
+        })
     }
 
     crate fn balances_impl(&self)
-        -> Box<Future<Item = api::Balances, Error = api::errors::Error> + Send + 'static>
+        -> impl Future<Item = api::Balances, Error = api::errors::Error> + Send + 'static
     {
         let query = QueryString::new();
 
-        let fut = self.request("api/2/trading/balance", Method::GET, query).and_then(|body|
-        {
+        self.request("api/2/trading/balance", Method::GET, query).and_then(|body| {
             let balances: Vec<HitBtcBalance<'_>> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -233,15 +215,15 @@ impl Client {
                 })
             }).collect();
             Ok(balances)
-        });
-        Box::new(fut)
+        })
     }
 
     crate fn get_symbols(&self)
-        -> Box<Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static>
+        -> impl Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static
     {
         let query = QueryString::new();
-        let fut = self.request("api/2/public/symbol", Method::GET, query).and_then(|body| {
+
+        self.request("api/2/public/symbol", Method::GET, query).and_then(|body| {
             let products: Vec<HitBtcSymbol<'_>> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -271,7 +253,6 @@ impl Client {
                 }
             }
             Ok(symbols)
-        });
-        Box::new(fut)
+        })
     }
 }

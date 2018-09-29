@@ -1,6 +1,5 @@
 use openssl::{sign::Signer, hash::MessageDigest};
 use hyper::{Method, Request};
-use std::borrow::Borrow;
 use futures::prelude::*;
 use failure::Fail;
 use log::{warn, debug, error};
@@ -94,11 +93,8 @@ impl Client {
         path: &str,
         method: Method,
         body: String
-    ) -> Box<
-            Future<Item = hyper::Chunk, Error = api::errors::ApiError<K>>
-            + Send
-            + 'static
-        > where RestError: ErrorKinded<K>
+    ) -> impl Future<Item = hyper::Chunk, Error = api::errors::ApiError<K>> + Send + 'static
+            where RestError: ErrorKinded<K>
     {
         let address = format!(
             "{}/{}",
@@ -126,17 +122,9 @@ impl Client {
             .header("User-Agent", &b"hyper"[..])
             .header("Content-Type", &b"application/json"[..]);
         
-        let request = match request.body(body.into()) {
-            Ok(request) => request,
-            Err(err) => return Box::new(
-                Err(err)
-                    .map_err(api::errors::RequestError::new)
-                    .map_err(api::errors::ApiError::RequestError)
-                    .into_future()
-            )
-        };
-
-        let fut = self.http_client.request(request).and_then(|res| {
+        // Unwrap because it is a bug if this fails (header failed to parse or something)
+        let request = request.body(body.into()).unwrap();
+        self.http_client.request(request).and_then(|res| {
             let status = res.status();
             res.into_body().concat2().and_then(move |body| {
                 Ok((status, body))
@@ -153,20 +141,20 @@ impl Client {
                 )?;
             }
             Ok(body)
-        });
-        Box::new(fut)
+        })
     }
 
-    crate fn order_impl<T: Borrow<Order>>(&self, order: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
+    crate fn order_impl(&self, order: WithSymbol<&Order>)
+        -> impl Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static
     {
+        use std::borrow::Borrow;
+
         // Note that GDAX only accepts custom client ids in the form of UUIDs, so there can
         // never be duplicate orders inserted in the `order_ids` map. This is actually quite
         // neat because checking for duplicate orders in a synchronized manner would have been
         // difficult otherwise.
 
         let symbol = order.symbol();
-        let order = (*order).borrow();
 
         let client_oid = order.order_id.clone();
         let time_in_force = order.time_in_force;
@@ -188,7 +176,7 @@ impl Client {
 
         let order_ids = self.order_ids.clone();
 
-        let fut = self.request("orders", Method::POST, body).and_then(move |body| {
+        self.request("orders", Method::POST, body).and_then(move |body| {
             let ack: GdaxOrderAck<'_> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -219,15 +207,12 @@ impl Client {
             Ok(OrderAck {
                 order_id,
             }.with_timestamp(timestamp))
-        });
-        Box::new(fut)
+        })
     }
 
-    crate fn cancel_impl<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
+    crate fn cancel_impl(&self, cancel: WithSymbol<&Cancel>)
+        -> Box<dyn Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
-        let cancel = (*cancel).borrow();
-
         let endpoint = match self.order_ids.get(&cancel.order_id) {
             Some(order_id) => format!("orders/{}", *order_id),
             None => {
@@ -249,9 +234,9 @@ impl Client {
     }
 
     crate fn balances_impl(&self)
-        -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
+        -> impl Future<Item = Balances, Error = api::errors::Error> + Send + 'static
     {
-        let fut = self.request("accounts", Method::GET, String::new()).and_then(|body| {
+        self.request("accounts", Method::GET, String::new()).and_then(|body| {
             let accounts: Vec<GdaxAccount<'_>> = serde_json::from_slice(&body)
                 .map_err(api::errors::RequestError::new)
                 .map_err(api::errors::ApiError::RequestError)?;
@@ -263,14 +248,13 @@ impl Client {
                 })
             }).collect();
             Ok(balances)
-        });
-        Box::new(fut)
+        })
     }
 
     crate fn get_symbols(&self)
-        -> Box<Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static>
+        -> impl Future<Item = HashMap<String, Symbol>, Error = api::errors::Error> + Send + 'static
     {
-        let fut = self.request("products", Method::GET, String::new())
+        self.request("products", Method::GET, String::new())
             .join(self.request("currencies", Method::GET, String::new()))
             .and_then(|(body_products, body_currencies)|
         {
@@ -313,7 +297,6 @@ impl Client {
                 }
             }
             Ok(symbols)
-        });
-        Box::new(fut)
+        })
     }
 }

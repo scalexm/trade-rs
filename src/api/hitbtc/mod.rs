@@ -6,7 +6,6 @@ mod wss;
 
 use serde_derive::{Serialize, Deserialize};
 use std::collections::HashMap;
-use std::borrow::Borrow;
 use log::debug;
 use futures::prelude::*;
 use crate::api::{
@@ -105,28 +104,28 @@ impl ApiClient for Client {
         self.new_stream(symbol, flags)
     }
 
-    fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
+    fn order(&self, order: WithSymbol<&Order>)
+        -> Box<dyn Future<Item = Timestamped<OrderAck>, Error = api::errors::OrderError> + Send + 'static>
     {
-        self.order_impl(order)
+        Box::new(self.order_impl(order))
     }
 
-    fn cancel<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
+    fn cancel(&self, cancel: WithSymbol<&Cancel>)
+        -> Box<dyn Future<Item = Timestamped<CancelAck>, Error = api::errors::CancelError> + Send + 'static>
     {
-        self.cancel_impl(cancel)
+        Box::new(self.cancel_impl(cancel))
     }
 
     fn ping(&self)
-        -> Box<Future<Item = Timestamped<()>, Error = api::errors::Error> + Send + 'static>
+        -> Box<dyn Future<Item = Timestamped<()>, Error = api::errors::Error> + Send + 'static>
     {
         Box::new(Ok(().timestamped()).into_future())
     }
 
     fn balances(&self)
-        -> Box<Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
+        -> Box<dyn Future<Item = Balances, Error = api::errors::Error> + Send + 'static>
     {
-        self.balances_impl()
+        Box::new(self.balances_impl())
     }
 }
 

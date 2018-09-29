@@ -36,10 +36,10 @@ fn send_orders<C: ApiClient>(client: &C, symbol: &str, margin: TickUnit)
     let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 
     // Try to send the buy order.
-    runtime.block_on(client.order(bid_order.add_symbol(symbol)))?;
+    runtime.block_on(client.order(bid_order.with_symbol(symbol)))?;
 
     // Now try to send the sell order.
-    if let Err(_) = runtime.block_on(client.order(ask_order.add_symbol(symbol))) {
+    if let Err(_) = runtime.block_on(client.order(ask_order.with_symbol(symbol))) {
         println!("we were not able to execute the sell order, better to cancel the buy one");
         let cancel_order = trade::api::Cancel::new(
             // Do not use the name "my_bid_order" directly, as it was only given
@@ -47,7 +47,7 @@ fn send_orders<C: ApiClient>(client: &C, symbol: &str, margin: TickUnit)
             // However we did provide an order ID, so `unwrap` is ok here.
             bid_order.order_id().unwrap().to_owned()
         );
-        runtime.block_on(client.cancel(cancel_order.add_symbol(symbol)))?;
+        runtime.block_on(client.cancel(cancel_order.with_symbol(symbol)))?;
     }
 
     Ok(())

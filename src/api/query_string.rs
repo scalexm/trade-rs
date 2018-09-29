@@ -12,14 +12,22 @@ impl QueryString {
         }
     }
 
+    crate fn push_str(&mut self, name: &str, arg: &str) {
+        if !self.query.is_empty() {
+            self.query.push('&');
+        }
+        self.query.push_str(name);
+        self.query.push('=');
+        self.query.push_str(arg);
+    }
+
     crate fn push<P: fmt::Display>(&mut self, name: &str, arg: P) {
         use std::fmt::Write;
 
-        if self.query.is_empty() {
-            write!(&mut self.query, "{}={}", name, arg).unwrap();
-        } else {
-            write!(&mut self.query, "&{}={}", name, arg).unwrap();
+        if !self.query.is_empty() {
+            self.query.push('&');
         }
+        write!(&mut self.query, "{}={}", name, arg).unwrap();
     }
 
     crate fn into_string(self) -> String {

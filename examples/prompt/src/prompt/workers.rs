@@ -34,7 +34,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
         match event {
             PushEvent::Order(order) => {
                 let cloned = self.pull.clone();
-                let order_fut = self.client.order(order.add_symbol(self.symbol)).then(move |res| {
+                let order_fut = self.client.order(order.with_symbol(self.symbol)).then(move |res| {
                     cloned.send(PullEvent::OrderAck(res.err())).unwrap();
                     Ok(())
                 });
@@ -42,7 +42,7 @@ impl<C: ApiClient + Send + 'static> PushThread<C> {
             },
             PushEvent::Cancel(cancel) => {
                 let cloned = self.pull.clone();
-                let cancel_fut = self.client.cancel(cancel.add_symbol(self.symbol)).then(move |res| {
+                let cancel_fut = self.client.cancel(cancel.with_symbol(self.symbol)).then(move |res| {
                     cloned.send(PullEvent::CancelAck(res.err())).unwrap();
                     Ok(())
                 });

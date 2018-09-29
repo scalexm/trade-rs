@@ -1,7 +1,4 @@
-#[macro_use] extern crate criterion;
-extern crate trade;
-
-use criterion::Criterion;
+use criterion::{criterion_main, criterion_group, Criterion};
 use trade::tick::Tick;
 
 fn criterion_benchmark(c: &mut Criterion) {

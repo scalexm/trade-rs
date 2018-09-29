@@ -12,7 +12,6 @@ mod wss;
 
 use futures::prelude::*;
 use std::collections::HashMap;
-use std::borrow::Borrow;
 use serde_derive::{Serialize, Deserialize};
 use bitflags::bitflags;
 use crate::Side;
@@ -335,15 +334,15 @@ pub trait ApiClient: GenerateOrderId {
     }
 
     /// Send an order to the exchange.
-    fn order<T: Borrow<Order>>(&self, order: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<OrderAck>, Error = errors::OrderError> + Send + 'static>;
+    fn order(&self, order: WithSymbol<&Order>)
+        -> Box<dyn Future<Item = Timestamped<OrderAck>, Error = errors::OrderError> + Send + 'static>;
 
     /// Send a cancel order to the exchange.
     ///
     /// # Note
     /// Do no try to cancel an order if said order has not yet been confirmed by the exchange.
-    fn cancel<T: Borrow<Cancel>>(&self, cancel: WithSymbol<T>)
-        -> Box<Future<Item = Timestamped<CancelAck>, Error = errors::CancelError> + Send + 'static>;
+    fn cancel(&self, cancel: WithSymbol<&Cancel>)
+        -> Box<dyn Future<Item = Timestamped<CancelAck>, Error = errors::CancelError> + Send + 'static>;
 
     /// Send a ping to the exchange. This can be used to measure the whole roundtrip time,
     /// including authentication and passage through the various software layers. For binance,
@@ -352,9 +351,9 @@ pub trait ApiClient: GenerateOrderId {
     /// # Note
     /// Only work for binance right now.
     fn ping(&self)
-        -> Box<Future<Item = Timestamped<()>, Error = errors::Error> + Send + 'static>;
+        -> Box<dyn Future<Item = Timestamped<()>, Error = errors::Error> + Send + 'static>;
 
     /// Retrieve balances for this account.
     fn balances(&self)
-        -> Box<Future<Item = Balances, Error = errors::Error> + Send + 'static>;
+        -> Box<dyn Future<Item = Balances, Error = errors::Error> + Send + 'static>;
 }
