@@ -1,13 +1,17 @@
 [package]
 name = "trade"
 version = "0.1.0"
-authors = ["scalexm <martin.alex32@hotmail.fr>"]
-keywords = ["binance", "gdax", "coinbase", "hitbtc"]
+authors = ["scalexm <alexandre@scalexm.fr>"]
 edition = "2018"
 exclude = [
     "benches/*",
     "examples/*",
 ]
+description = "Utilities for trading on crypto-currencies exchanges."
+repository = "https://github.com/scalexm/trade-rs"
+readme = "README.md"
+license = "MIT"
+keywords = ["binance", "gdax", "coinbase", "hitbtc"]
 
 [dependencies]
 serde_json = "^1"
