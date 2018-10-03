@@ -2,7 +2,12 @@
 name = "trade"
 version = "0.1.0"
 authors = ["scalexm <martin.alex32@hotmail.fr>"]
+keywords = ["binance", "gdax", "coinbase", "hitbtc"]
 edition = "2018"
+exclude = [
+    "benches/*",
+    "examples/*",
+]
 
 [dependencies]
 serde_json = "^1"
