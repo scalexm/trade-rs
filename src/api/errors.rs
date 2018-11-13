@@ -19,12 +19,10 @@ pub struct RestError<K: ErrorKind> {
 
 impl<K: ErrorKind> failure::Fail for RestError<K> {
     fn cause(&self) -> Option<&failure::Fail> {
-        use failure::Fail;
         self.inner.cause()
     }
 
     fn backtrace(&self) -> Option<&Backtrace> {
-        use failure::Fail;
         self.inner.backtrace()
     }
 }

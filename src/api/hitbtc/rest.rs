@@ -59,6 +59,7 @@ impl AsStr for TimeInForce {
 struct HitBtcOrderAck<'a> {
     clientOrderId: &'a str,
     createdAt: &'a str,
+    status: &'a str,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Deserialize)]
@@ -160,8 +161,13 @@ impl Client {
             "price",
             order.price.unticked(symbol.price_tick()).borrow() as &str
         );
+
         if let Some(order_id) = &order.order_id {
             query.push_str("clientOrderId", order_id);
+        }
+
+        if order.type_ == OrderType::LimitMaker {
+            query.push_str("postOnly", "true");
         }
 
         self.request("api/2/order", Method::POST, query).and_then(|body| {
